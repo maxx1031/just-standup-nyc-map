@@ -12,7 +12,7 @@
    One card per module, each in its module colour: 1 NO EQUIPMENT (pink, punchy track),
    2 NO PLACE (green, calm track), 3 NO COACH (blue). The question always sits dead centre.
    The flying one-liners only run on the opening card; later cards keep just the taped strips.
-   ?card=end is the finale: NO EQUIPMENT, / NO SPACE, NO COACH, / NO PROBLEM. / JUST STANDUP, stamped in line by line.
+   ?card=end is the finale: NO EQUIPMENT, / NO SPACE, / NO COACH, / NO PROBLEM. / JUST STANDUP, one size, stamped in line by line.
    Phone-shaped on a laptop, full screen on a phone. Tap / Space = smash, then next. */
 :root{
   --bg:#0B0F0E; --fg:#EDF3EF; --mute:#8FA39A; --lime:#C6FF3D; --pink:#FF4FA3; --cyan:#5EE6D0; --violet:#8A5CFF; --yellow:#FFE45E;
@@ -107,7 +107,8 @@ canvas{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-in
   <button class="go-btn" id="goBtn" type="button"></button>
   <section class="end" id="end" hidden aria-live="polite">
     <div class="l pink">NO EQUIPMENT,</div>
-    <div class="l"><span class="green">NO SPACE,</span> <span class="blue">NO COACH,</span></div>
+    <div class="l green">NO SPACE,</div>
+    <div class="l blue">NO COACH,</div>
     <div class="l white">NO PROBLEM.</div>
     <div class="l brand">JUST STANDUP</div>
     <div class="snd" id="snd">TAP FOR SOUND 🔊</div>
@@ -282,18 +283,25 @@ addEventListener('keydown', e => {
   if (e.key === 'ArrowLeft' && ONLY == null) { e.preventDefault(); stopMusic(); build(Math.max(0, card - 1)); }
 });
 /* ---------- finale ---------- */
+// every finale line the same size: the size at which the longest line still fits
+function fitSame(lines) {
+  lines.forEach(l => fit(l, 13));
+  const size = Math.min(...lines.map(l => parseFloat(l.style.fontSize)));
+  lines.forEach(l => l.style.fontSize = size + 'cqw');
+}
 function finale() {
   $('#end').hidden = false;
   const lines = [...document.querySelectorAll('#end .l')];
-  lines.forEach((l, i) => { fit(l, i === 3 ? 15 : 12); l.classList.remove('in'); });
+  fitSame(lines); lines.forEach(l => l.classList.remove('in'));
   let silent = false;
   const play = () => {
     stopMusic();
     lines.forEach((l, i) => setTimeout(() => {
       l.classList.remove('in'); void l.offsetWidth; l.classList.add('in');
-      i < 3 ? noiseHit(0, 0.35, 1200, 0.9) : impact();
-      if (i === 3) { $('#stage').classList.add('shake'); setTimeout(() => $('#stage').classList.remove('shake'), 450); fanfare(); setTimeout(() => startMusic('punchy'), 1200); }
-    }, 300 + i * 650));
+      const last = i === lines.length - 1;
+      !last ? noiseHit(0, 0.35, 1200, 0.9) : impact();
+      if (last) { $('#stage').classList.add('shake'); setTimeout(() => $('#stage').classList.remove('shake'), 450); fanfare(); setTimeout(() => startMusic('punchy'), 1200); }
+    }, 300 + i * 550));
   };
   // no tap has happened in this page yet, so the browser may keep it silent: then offer a tap that replays it with sound
   audio(); silent = !ac || ac.state !== 'running';
@@ -314,7 +322,7 @@ function fanfare() {   // the same victory brass as the warm-up (motion/core.js)
 
 if (ONLY === 'end') { ['#junk', '#q', '#hint', '#reveal', '#goBtn', '.top'].forEach(q => $(q).hidden = true); document.documentElement.style.setProperty('--accent', 'var(--lime)'); finale(); }
 else build(ONLY != null ? Math.min(CARDS.length - 1, Math.max(0, +ONLY)) : 0);
-document.fonts && document.fonts.ready.then(() => { fit($('#q'), 13); fit($('#reveal h1'), 15); document.querySelectorAll('#end .l').forEach((l, i) => fit(l, i === 3 ? 15 : 12)); });   // re-fit once the drip font is in
+document.fonts && document.fonts.ready.then(() => { fit($('#q'), 13); fit($('#reveal h1'), 15); if (ONLY === 'end') fitSame([...document.querySelectorAll('#end .l')]); });   // re-fit once the drip font is in
 })();
 </script>
 </body>
