@@ -218,3 +218,11 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Just Standup
+.env
+*.env
+!.env.example
+!config/surreal.env
+data_web/
+deploy/qr.png

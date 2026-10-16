@@ -1,0 +1,15 @@
+# Local machine: deploy to Daytona, run the planner / web app locally for testing.
+# (The server sandbox and the planner image install their own copies; see deploy/.)
+daytona>=0.224.1
+anthropic[bedrock]>=1.15
+aws-bedrock-token-generator
+boto3
+arize-otel>=0.14
+surrealdb>=2
+fastapi
+uvicorn[standard]
+python-multipart
+qrcode[pil]
+opencv-python-headless>=4.10
+numpy
+pillow
