@@ -1,75 +1,107 @@
-# 纽约 3D 地图 Demo（10.16 黑客松）
+# Just Standup
 
-风格按 `UI_newyork.png`（M1 纽约总览）和 `UI2_newyork.png`（M2 Brooklyn 落点）做，只画纽约五个区。
+**You can exercise anywhere, anytime. Just no excuse.**
 
-**演示流程：** 打开是纽约总览 → 点 Enter Brooklyn → Brooklyn「点亮」（板块变亮、轮廓光晕变大、BOROUGHS LIT 0/5 → 1/5，约 1 秒）→ 俯冲进 DUMBO（4 秒），真实楼宇随镜头拉近从地面升起 → 落在你拍视频的 4 个点，底部卡片播放对应视频。
+> "Hey bro, let's go to the gym!"
+> "Deadline." "LeetCode first." "Maybe tomorrow."
 
-## 怎么跑
-```bash
-cd ~/Downloads/01_1016_黑客松
-python3 -m http.server 5180
-```
-打开 http://127.0.0.1:5180 。
-- 不能直接双击 index.html：浏览器会拦截读取 `nyc.geojson`。
-- **地图本身可以离线跑。** 地图数据和 MapLibre 都在本地，不连网也能画出来。只有字体从 Google Fonts 加载，断网时会退回系统字体。
+Every CS friend we have gives the same three excuses: *I don't have the device. I don't have a place. I don't know what to do.* Just Standup is a phone game with one act for each excuse. Every act follows the same pattern: the excuse, a one-line answer, a live demo.
 
-## 文件
-| 文件 | 内容 |
-|---|---|
-| `index.html` | 整个 Demo：样式、地图、按钮、图钉都在这一个文件里 |
-| `nyc.geojson` | 预先算好的全部地图几何（1.4 MB） |
-| `lib/` | MapLibre GL JS 5.6.0（本地副本，不走 CDN） |
-| `截图/` | 桌面和手机的总览、落点截图，以及一段往返转场录屏 |
-| `旧版/` | 上一版：用 OpenFreeMap 瓦片画的真实建筑，楼块很多 |
-| `00_video/` | 你在 DUMBO 拍的视频；其中 4 段用作点位视频 |
-
-## 地图里有什么（全部来自 `nyc.geojson`，提前算好）
-| 名称 | 用途 | 数量 | 数据来源 |
+| Act | The excuse | The answer | What you do |
 |---|---|---|---|
-| `borough` | 五个区的板块（总览用）。Brooklyn 青柠色，其余区蓝绿色，表面带网格纹理 | 5 | NYC Open Data |
-| `shore` | Brooklyn、Manhattan 的精细岸线。近景用作地面，以及青柠色的 Brooklyn 水岸线 | 2 | NYC Open Data |
-| `bldg` | DUMBO 核心区（半径 520 m）的真实楼宇轮廓和高度；zoom 14.2→15.7 之间从地面升到实际高度 | 306 | OSM（392/424 栋有 `height` 标签，其余用楼层估算或 10 m 兜底） |
-| `block` | 核心区外的方块网格：70 m 一格，斜 15°，配合 bearing -60 斜看时像菱形 | 4,655 | 根据岸线生成 |
-| `bar` | 核心区外的光柱：每 3×3 格只留最高的一栋，而且只保留 ≥45 m 的楼 | 151 | OSM 建筑高度 |
-| `citybar` | 总览光柱：约 450 m 一格取最高楼，只保留 ≥110 m、在五区内的楼（新泽西的楼已排除） | 120 | OSM 建筑高度 |
-| `bridge` / `tower` | Brooklyn Bridge、Manhattan Bridge 的桥面和桥塔 | 2 / 4 | OSM |
-| `ring` | 总览里围绕 Brooklyn 的雷达圈 | 3 | 生成 |
+| 1 | No device | Your phone is the device | Scan a QR code and throw punches with your phone |
+| 2 | No place | New York is the gym | Fly over NYC, dive into Brooklyn, claim a real spot with ink |
+| 3 | No coach | AI reads your room | Film a room and get a workout built from its furniture |
 
-飞入 Brooklyn 时，板块会随缩放沉到地面，同时近景的方块网格淡入。这个效果完全由 zoom 表达式驱动，不在每一帧做计算。
+**Team:** Max researches human motion at Dartmouth and boxes. Brian builds motion models.
 
-**光柱只是示意。** 位置和高度来自 OSM，但做过合并，一根光柱不等于一栋真实的楼。
+---
 
-## 数据来源
-- **区界**：NYC Open Data「Borough Boundaries」(`gthc-hcne`)，NYC Department of City Planning 发布，2026-10-15 下载。
-  - 总览板块：简化容差约 30 m，去掉小于 1.5e-4 deg² 的岛。
-  - 近景岸线：简化容差约 4 m。
-- **建筑高度、桥梁**：© OpenStreetMap contributors (ODbL)，2026-10-15 通过 Overpass API 查询。
-  - 高度取 `height` 标签；没有的话用 `building:levels × 3.2 m` 估算。
-  - 桥塔位置是沿桥面按比例估的，不是测量值。
-- **点位**：来自你拍的视频。视频文件里没有 GPS，位置是我看画面判断的，你确认过，再用 OSM（Nominatim）取坐标。精确到街区，不是精确到米。
-  | # | 地点 | 视频 | 经度, 纬度 |
-  |---|---|---|---|
-  | 01 | Fulton Ferry Landing（桥下） | `01_布鲁克林桥下.mp4` | -73.9946, 40.7036 |
-  | 02 | Empire Fulton Ferry 草坪 | `10_草坪看大桥.mp4` | -73.9919, 40.7046 |
-  | 03 | Water Street 石子路 | `12_铁门石子路.mp4` | -73.9902, 40.7032 |
-  | 04 | St. Ann's Warehouse 红砖院子 | `13_红砖院子_橙桌.mp4` | -73.9928, 40.7036 |
-  - 图钉缩略图是从这 4 段视频截的帧，挑的都是没有人脸的帧，已嵌进 index.html，不占额外文件。
+## Act 1 · No device? No problem.
 
-## 重新生成 `nyc.geojson`
-生成脚本 `build_nyc.py` 和它用的原始数据（区界 + Overpass 查询结果）为了少放文件，都没放进这个文件夹，只存在 Claude 这次对话的临时目录里。**这次对话之后就找不回来了。**之后想改格子大小、光柱密度或网格角度，要么先让 Claude 把脚本和数据存进来，要么重新下载数据再生成。
+*"I don't have an Apple Watch." You don't need one. You're holding one.*
 
-## 镜头参数（`views()`）
-| | 桌面 | 手机（竖屏） |
-|---|---|---|
-| NYC | zoom 10.45 / pitch 55 / bearing -28 | zoom 9.0 / pitch 55 / bearing -20 |
-| DUMBO | zoom 16.2 / pitch 62 / bearing -60 | zoom 15.8 / pitch 62 / bearing -60 |
+Scan the QR code on the laptop and your phone becomes the controller. No watch, no camera, no app install.
 
-DUMBO 视角是按"四个点都要避开头部和底部卡片"算出来的。bearing -60 让 Manhattan 和两座桥出现在画面右上方，跟设计稿一致。
+- **Warm-up:** the phone asks for 3 straight punches, 3 uppercuts and 3 jump shots. The first punches also teach the classifier *your* movements.
+- **Recognition:** the phone streams its accelerometer and gyroscope at 60 Hz. A punch is matched to the nearest punch you taught it (straight or uppercut). A jump shot is detected from an upward push plus a dip, a wrist flick or airtime.
+- **Feedback:** every recognized move throws a splash of ink onto a toon-shaded Brooklyn wall (DUMBO), with its own sound.
+- **Live monitor:** the laptop shows the QR code, a live mirror of the player's phone, and the raw motion signals behind every prediction.
 
-## 已知限制
-- **落点 zoom 略高于任务要求。** 桌面 16.2、手机 15.8，任务要求是约 15–16；这是为了真正俯冲进 DUMBO 街区。
-- **点位精度只到街区。** 位置是看画面判断的，不是 GPS。
-- **楼宇高度来自 OSM，没有逐栋核对。** 少数没有高度标签的楼是估算值。
-- **手机总览里 Manhattan 标签被 BROOKLYN 卡片挡住了。**
-- **点亮只在第一次进 Brooklyn 时播放。** 之后来回都直接飞；刷新页面会重置。
-- **帧率只在无头 Chrome 里测过。** 软件渲染下，往返录屏在约 21 秒里拿到 705 帧（约 33 fps）。真机没有测过。
+## Act 2 · No place? No problem.
+
+*"There's no gym near me." New York is the gym.*
+
+The map opens on all five boroughs. Brooklyn lights up, then the camera dives into DUMBO while real buildings rise from the ground. Each pin is a real place filmed on a phone: Fulton Ferry Landing, the Empire Fulton Ferry lawn, the Water Street cobblestones, the St. Ann's Warehouse courtyard. Open a spot, see what to do there, and claim it with ink.
+
+## Act 3 · No coach? Now you have a coach.
+
+*"I don't know what to do, and I'm scared of doing it wrong."*
+
+You film your room, and the app goes through three steps: **RENDERING** (the video becomes a 3D space), **IDENTIFY** (it finds usable objects), and **GENERATION** (it builds a short strength routine around them). In the demo office, that routine is a rear-foot split squat on a chair, a leg stretch on a railing, and a single-leg squat at a table. A guide then walks you to each spot and shows the move.
+
+---
+
+## What is real in this demo, and what is the plan
+
+We want judges to know exactly what they are looking at.
+
+**Working now**
+- Phone motion recognition (straight / uppercut / jump shot), live phone-to-laptop streaming, and the ink feedback.
+- The NYC → Brooklyn → DUMBO map, built from NYC Open Data and OpenStreetMap, with spots taken from our own footage.
+- The Act 3 flow (room video → 3D space → spots → guided routine).
+
+**Pre-built for the demo**
+- The Act 3 office scene and its three spots were built ahead of time from one real room video. The app replays that build; it does not reconstruct your room live yet.
+- The Act 2 spots and moves were chosen by hand.
+
+**The agent pipeline (next step)**
+
+We connected and smoke-tested the sponsor SDKs. The pipeline below is the design; it is not wired into this repo yet.
+
+| Piece | Role |
+|---|---|
+| Anchor Browser | The agent browses the web to find nearby spots (a railing, a set of steps, an open court) and suitable moves for each |
+| SurrealDB Agent Memory | Stores spots, moves and each user's training history |
+| Daytona | Runs the room-reading and workout-generation agent in a sandbox |
+| Arize AX | Traces every recommendation and evaluates whether it is safe before the user sees it (no standing on rolling chairs) |
+
+---
+
+## Run it
+
+The demo needs Node.js (no npm install) and, for phones, `cloudflared`.
+
+```bash
+node server.js                                   # serves this folder on http://localhost:5190
+cloudflared tunnel --url http://localhost:5190   # gives an https link; phones need https for motion sensors
+```
+
+- **Laptop:** open `/journey-monitor.html` through the tunnel link. It shows the QR code, the mirrored phone and the live signals.
+- **Phone:** scan the QR code. It opens `/journey.html`, which runs the three acts in order.
+- Act 3 is the earlier Just Standup app, which `server.js` serves under `/m3/`. It lives in a separate repo, so without it Act 3 won't load.
+
+## Files
+
+| Path | What it is |
+|---|---|
+| `journey.html` | Phone: the full flow (chapter cards → three acts → finale) |
+| `journey-monitor.html` | Laptop: QR code, mirrored phone view, live motion signals |
+| `chapters.html` | The chapter cards and the finale ("No device, no place, no coach. No excuse.") |
+| `motion/` | Act 1: phone controller (`play.html`), motion lab and classifier (`motion-lab.html`, `core.js`), sounds |
+| `布鲁克林伪3D.html` | The toon-shaded Brooklyn scene (bridge, East River, DUMBO walls) behind Act 1 |
+| `index.html` + `nyc.geojson` | Act 2: the NYC 3D map and all of its precomputed geometry |
+| `server.js` | Zero-dependency server: static files, phone → laptop live stream (POST + SSE), QR code |
+| `lib/` | Local copies of MapLibre GL JS 5.6.0 and three.js r160 |
+| `00_video/` | Our own DUMBO footage; four clips are the Act 2 spot videos |
+| `截图/`, `旧版/` | Map screenshots, and an older version of the map |
+
+## Data and credits
+
+- **Borough boundaries:** NYC Open Data "Borough Boundaries" (`gthc-hcne`), NYC Department of City Planning, downloaded 2026-10-15.
+- **Buildings and bridges:** © OpenStreetMap contributors (ODbL), queried through the Overpass API on 2026-10-15. Heights come from the `height` tag, or `building:levels × 3.2 m` when that tag is missing. The light bars on the map are merged and illustrative; one bar is not one building.
+- **Spots:** our own videos, which carry no GPS. Each location was identified from the footage and geocoded with OSM Nominatim, so it is accurate to the block, not to the meter. Pin thumbnails use frames with no faces.
+
+---
+
+*You don't need more time. You just need to stand up.*
