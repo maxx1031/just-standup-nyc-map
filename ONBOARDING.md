@@ -43,6 +43,9 @@ with db.connect() as c: print(c.query('SELECT VALUE count() FROM exercise GROUP 
 The current deployment (on Daytona; the URL changes if the server is recreated):
 **https://8080-697ad785-13c4-481f-b05e-782bc2794d14.daytonaproxy01.net** (QR: append `/qr`)
 
+Test server with the sample scenes (instance `test`):
+**https://8080-3ade338c-9762-4f2d-8fea-ddfb285747c9.daytonaproxy01.net**, QR code: [`docs/test-server-qr.png`](docs/test-server-qr.png). It goes stale if that instance is recreated or taken down.
+
 ```bash
 scripts/smoke_test.sh https://8080-697ad785-13c4-481f-b05e-782bc2794d14.daytonaproxy01.net
 ```
