@@ -1,0 +1,543 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0B0F0E">
+<title>Explore New York</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 34 44'%3E%3Cpath d='M17 43C17 43 2 26.5 2 16a15 15 0 0 1 30 0c0 10.5-15 27-15 27z' fill='%23C6FF3D'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Anton&family=JetBrains+Mono:wght@400;500;700&family=Space+Grotesk:wght@400;500;700&display=swap" rel="stylesheet">
+<link href="lib/maplibre-gl.css" rel="stylesheet">
+<style>
+  /* Tokens — Just Standup M1/M2 */
+  :root {
+    --page: #0B0F0E;
+    --map: #060A09;
+    --card: #121917;
+    --line: #1A2321;
+    --text: #EDF3EF;
+    --soft: #8FA39A;
+    --teal: #5EE6D0;
+    --lime: #C6FF3D;
+    --lime-hover: #D4FF66;
+    --safe-b: env(safe-area-inset-bottom, 0px);
+    --safe-t: max(16px, env(safe-area-inset-top));
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: var(--page); color: var(--text); font-family: 'Space Grotesk', system-ui, sans-serif; overflow: hidden; }
+  button { font: inherit; cursor: pointer; color: inherit; }
+  .mono { font-family: 'JetBrains Mono', ui-monospace, monospace; }
+  #map { position: fixed; inset: 0; background: var(--map); }
+  [hidden] { display: none !important; }
+
+  /* ---------- Header ---------- */
+  .hud { position: fixed; top: 0; left: 0; right: 0; padding: var(--safe-t) 20px 28px; z-index: 3; pointer-events: none;
+         background: linear-gradient(var(--page) 0%, rgba(11,15,14,.85) 60%, rgba(11,15,14,0) 100%); }
+  .hud > * { pointer-events: auto; }
+  .row { display: flex; align-items: center; gap: 12px; }
+  .row.between { justify-content: space-between; }
+  .brand { font-family: 'Anton', sans-serif; font-size: 20px; line-height: 1; letter-spacing: .02em; color: var(--page); background: var(--lime); padding: 6px 10px 5px; border-radius: 6px; transform: skewX(-8deg); box-shadow: 0 0 20px rgba(198,255,61,.35); }
+  .tag-explore { font-size: 11px; color: var(--teal); }
+  .back { width: 44px; height: 44px; flex: none; border-radius: 14px; border: 1px solid rgba(255,255,255,.10); background: var(--card); display: grid; place-items: center; }
+  .back:hover { background: var(--line); }
+  .crumb { font-size: 11px; letter-spacing: .1em; color: var(--soft); }
+  .crumb b { color: var(--lime); font-weight: 500; }
+  h1 { margin: 12px 0 0; font-family: 'Anton', sans-serif; font-weight: 400; font-size: clamp(40px, 6vw, 60px); line-height: .95; text-transform: uppercase; }
+  h1 .teal { color: var(--teal); }
+  h1 .dot { color: var(--lime); }
+  .progress { margin-top: 12px; display: flex; align-items: center; gap: 10px; max-width: 520px; }
+  .progress .k { font-size: 11px; letter-spacing: .1em; color: var(--soft); white-space: nowrap; }
+  .progress .k b { color: var(--text); font-weight: 500; }
+  .segs { flex: 1; display: flex; gap: 4px; }
+  .segs i { flex: 1; height: 4px; border-radius: 2px; background: var(--line); transition: background .3s, box-shadow .3s; }
+  .segs i.ready { background: rgba(198,255,61,.35); box-shadow: 0 0 8px rgba(198,255,61,.5); }
+  .segs i.lit { background: var(--lime); box-shadow: 0 0 8px rgba(198,255,61,.7); }
+
+  /* ---------- Bottom ---------- */
+  .dock { position: fixed; left: 20px; right: 20px; bottom: calc(40px + var(--safe-b)); z-index: 3; display: flex; flex-direction: column; align-items: center; gap: 12px; pointer-events: none; }
+  .dock > * { pointer-events: auto; width: 100%; max-width: 520px; }
+  .legend { display: flex; gap: 16px; font-size: 10px; letter-spacing: .06em; color: var(--soft); pointer-events: none !important; text-shadow: 0 1px 6px #000; }
+  .legend span { display: flex; align-items: center; gap: 6px; }
+  .sw { width: 9px; height: 9px; border-radius: 2px; display: inline-block; }
+  .sw.lime { background: var(--lime); box-shadow: 0 0 6px var(--lime); }
+  .sw.out { border: 1px solid var(--teal); }
+  .sw.round { border-radius: 50%; }
+  .sw.bar { width: 14px; height: 3px; border-radius: 2px; background: var(--lime); box-shadow: 0 0 6px var(--lime); }
+  .cta { height: 56px; border: 0; border-radius: 16px; background: var(--lime); color: var(--page); font-size: 16px; font-weight: 700; display: flex; align-items: center; justify-content: center; gap: 10px; box-shadow: 0 0 32px rgba(198,255,61,.25); transition: background .15s, opacity .2s; }
+  .cta:hover { background: var(--lime-hover); }
+  .cta:disabled, .back:disabled { opacity: .45; cursor: progress; }
+  :is(.cta, .back, .pin, .beam-card, .retry):focus-visible { outline: 2px solid var(--text); outline-offset: 3px; }
+
+  .spot-card { display: flex; align-items: center; gap: 14px; padding: 10px; border-radius: 20px; background: rgba(18,25,23,.95); border: 1px solid rgba(198,255,61,.3); }
+  .spot-card .thumb { width: 112px; height: 63px; flex: none; border-radius: 10px; overflow: hidden; background: #2D3B45; }
+  .spot-card .thumb svg { width: 100%; height: 100%; display: block; }
+  .spot-card .t { font-weight: 700; font-size: 17px; line-height: 1.2; }
+  .spot-card .d { margin-top: 3px; font-size: 13px; line-height: 1.35; color: var(--soft); }
+  .spot-card .pill { display: inline-block; margin-top: 6px; padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 700; background: rgba(198,255,61,.14); color: var(--lime); }
+
+  /* ---------- Map markers ---------- */
+  .chip { display: flex; align-items: center; gap: 5px; padding: 4px 9px; border-radius: 999px; font: 500 10px 'JetBrains Mono', monospace; letter-spacing: .08em; color: var(--teal); background: rgba(11,15,14,.88); border: 1px solid rgba(94,230,208,.4); white-space: nowrap; }
+  .chip.lime { color: var(--page); background: var(--lime); border-color: var(--lime); font-weight: 700; box-shadow: 0 0 14px rgba(198,255,61,.5); }
+  .chip .n { opacity: .6; }
+  .ground-text { font-family: 'Anton', sans-serif; font-size: 64px; letter-spacing: .02em; color: rgba(94,230,208,.13); pointer-events: none; }
+  .river { font: italic 500 11px 'JetBrains Mono', monospace; letter-spacing: .3em; color: rgba(94,230,208,.55); pointer-events: none; }
+
+  .beam-card { display: flex; flex-direction: column; align-items: center; background: none; border: 0; padding: 0; }
+  .beam-card .box { padding: 8px 18px 7px; border-radius: 14px; background: rgba(11,15,14,.9); border: 1.5px solid var(--lime); box-shadow: 0 0 22px rgba(198,255,61,.4); text-align: center; }
+  .beam-card .nm { font-family: 'Anton', sans-serif; font-size: 22px; line-height: 1; letter-spacing: .04em; color: var(--lime); }
+  .beam-card .sb { margin-top: 3px; font: 500 9px 'JetBrains Mono', monospace; letter-spacing: .08em; color: var(--text); }
+  .beam-card .beam { width: 20px; height: 90px; background: linear-gradient(rgba(198,255,61,0), rgba(198,255,61,.3)); position: relative; animation: beam 2.4s ease-in-out infinite; }
+  .beam-card .beam::after { content: ''; position: absolute; left: 8.5px; top: 0; bottom: 0; width: 3px; background: linear-gradient(rgba(198,255,61,0), rgba(198,255,61,.95)); }
+  @keyframes beam { 50% { opacity: .6; } }
+
+  .pin { position: relative; width: 52px; height: 60px; padding: 0; border: 0; background: none; display: block; }
+  .pin .drop { position: absolute; left: 4px; top: 0; width: 44px; height: 44px; padding: 3px; border-radius: 50% 50% 50% 0; transform: rotate(-45deg); transform-origin: 50% 100%; background: var(--teal); opacity: .9; transition: transform .2s, background .2s; }
+  .pin .face { display: block; width: 100%; height: 100%; border-radius: 50%; overflow: hidden; transform: rotate(45deg); background: #2D3B45; }
+  .pin .face svg { width: 100%; height: 100%; display: block; }
+  .pin .base { position: absolute; left: 50%; bottom: 0; width: 26px; height: 9px; margin-left: -13px; border-radius: 50%; border: 1.5px solid var(--teal); opacity: .8; }
+  .pin .lbl { position: absolute; left: 54px; top: 8px; }
+  .pin.on .drop { background: var(--lime); opacity: 1; transform: rotate(-45deg) scale(1.3); box-shadow: 0 0 22px rgba(198,255,61,.6); }
+  .pin.on .base { border-color: var(--lime); animation: ring 2s ease-out infinite; }
+  .pin.on .lbl { left: 64px; top: 4px; }
+  .pin.flip .lbl { left: auto; right: 54px; }
+  .pin.flip.on .lbl { right: 64px; }
+  .pin.lit:not(.on) .drop { background: #8FD9C6; }
+  @keyframes ring { 0% { transform: scale(.6); opacity: 1; } 100% { transform: scale(1.8); opacity: 0; } }
+  .near-only, .far-only { transition: opacity .4s; }
+  body.near .far-only, body:not(.near) .near-only { opacity: 0; visibility: hidden; transition: opacity .4s, visibility 0s .4s; }
+
+  /* Attribution */
+  .maplibregl-ctrl-attrib { background: rgba(0,0,0,.6) !important; color: var(--soft); font-size: 10px; }
+  .maplibregl-ctrl-attrib a { color: var(--soft); }
+  .maplibregl-ctrl-attrib-button { filter: invert(1) opacity(.6); }
+
+  /* Loading / error */
+  .veil { position: fixed; inset: 0; z-index: 9; display: grid; place-items: center; background: var(--page); transition: opacity .6s; }
+  .veil.gone { opacity: 0; pointer-events: none; }
+  .veil-box { text-align: center; padding: 24px; max-width: 320px; }
+  .veil-k { font-size: 11px; letter-spacing: .12em; color: var(--teal); }
+  .bar { margin: 14px auto 0; width: 160px; height: 3px; border-radius: 2px; background: var(--line); overflow: hidden; }
+  .bar i { display: block; width: 40%; height: 100%; background: var(--lime); box-shadow: 0 0 8px var(--lime); animation: slide 1.2s ease-in-out infinite; }
+  @keyframes slide { 0% { transform: translateX(-100%); } 100% { transform: translateX(250%); } }
+  .err-t { margin: 10px 0 6px; font-size: 18px; font-weight: 700; }
+  .err-d { font-size: 13px; color: var(--soft); line-height: 1.45; }
+  .retry { margin-top: 16px; height: 44px; padding: 0 22px; border: 0; border-radius: 12px; background: var(--lime); color: var(--page); font-weight: 700; }
+
+  @media (min-width: 900px) {
+    .hud { padding-left: 32px; padding-right: 32px; }
+  }
+  @media (max-width: 520px) {
+    .dock { left: 16px; right: 16px; bottom: calc(36px + var(--safe-b)); }
+    .hud { padding-left: 16px; padding-right: 16px; }
+    .spot-card .thumb { width: 88px; height: 56px; }
+    .spot-card .t { font-size: 15px; }
+    .ground-text { font-size: 44px; }
+    .pin:not(.on) .lbl { display: none; }
+    .beam-card .box { padding: 6px 12px 5px; }
+    .beam-card .nm { font-size: 17px; }
+    .beam-card .sb { font-size: 8px; }
+    .beam-card .beam { height: 56px; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation: none !important; transition: none !important; }
+  }
+</style>
+</head>
+<body>
+<div id="map" aria-label="Stylized 3D map of New York City"></div>
+
+<header class="hud">
+  <div id="hud-nyc">
+    <div class="row between">
+      <div class="brand">JUST STANDUP</div>
+      <div class="tag-explore mono">Explore</div>
+    </div>
+    <h1>Explore<br><span class="teal">New York.</span></h1>
+    <div class="progress">
+      <div class="k mono">BOROUGHS LIT <b>0 / 5</b></div>
+      <div class="segs"><i class="ready"></i><i></i><i></i><i></i><i></i></div>
+    </div>
+  </div>
+  <div id="hud-bk" hidden>
+    <div class="row">
+      <button class="back" id="btn-back" type="button" aria-label="Back to NYC">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 12H5M11 6l-6 6 6 6"/></svg>
+      </button>
+      <div class="crumb mono">NYC / BROOKLYN / <b id="crumb-spot">DUMBO</b></div>
+    </div>
+    <h1>Brooklyn<span class="dot">.</span></h1>
+    <div class="progress">
+      <div class="k mono">SPOTS LIT <b id="lit-count">0 / 4</b></div>
+      <div class="segs" id="lit-segs"><i></i><i></i><i></i><i></i></div>
+    </div>
+  </div>
+</header>
+
+<div class="dock">
+  <div class="legend mono" id="legend-nyc">
+    <span><i class="sw lime"></i>READY TO LIGHT</span>
+    <span><i class="sw out"></i>COMING SOON</span>
+  </div>
+  <div class="legend mono" id="legend-bk" hidden>
+    <span><i class="sw lime round"></i>SELECTED</span>
+    <span><i class="sw out round"></i>TO EXPLORE</span>
+    <span><i class="sw bar"></i>WATERFRONT</span>
+  </div>
+  <div class="spot-card" id="spot-card" hidden aria-live="polite">
+    <div class="thumb" id="card-thumb"></div>
+    <div>
+      <div class="t" id="card-title"></div>
+      <div class="d" id="card-desc"></div>
+      <span class="pill mono" id="card-pill"></span>
+    </div>
+  </div>
+  <button class="cta" id="btn-enter" type="button" disabled>Enter Brooklyn
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+  </button>
+</div>
+
+<div class="veil" id="veil" role="status" aria-live="polite">
+  <div class="veil-box">
+    <div id="veil-loading">
+      <div class="veil-k mono">LOADING NEW YORK…</div>
+      <div class="bar"><i></i></div>
+    </div>
+    <div id="veil-error" hidden>
+      <div class="veil-k mono" style="color:#ff8a80">MAP FAILED TO LOAD</div>
+      <div class="err-t">Can’t draw the map</div>
+      <div class="err-d" id="err-msg"></div>
+      <button class="retry" id="btn-retry" type="button">Retry</button>
+    </div>
+  </div>
+</div>
+
+<script src="lib/maplibre-gl.js"></script>
+<script>
+(() => {
+  'use strict';
+
+  // ---------- Data ----------
+  // Spot coordinates verified against OpenStreetMap (Nominatim) on 2026-10-15.
+  const T = { sky: '#2D3B45', sky2: '#33434C', city: '#1C262C', water: '#23464C', grass: '#3E5A3A', brick: '#5A3E35', stone: '#3A3631', rail: '#9AA8A6' };
+  const SPOTS = [
+    { id: '01', short: 'PIER 1', name: 'Brooklyn Bridge Park — Pier 1', lngLat: [-73.9962, 40.7027],
+      desc: 'Lawns and a waterfront path facing the Lower Manhattan skyline.',
+      thumb: `<rect width="70" height="34" fill="${T.sky}"/><g fill="${T.city}"><rect x="4" y="16" width="8" height="18"/><rect x="13" y="8" width="7" height="26"/><rect x="21" y="20" width="9" height="14"/><rect x="31" y="4" width="6" height="30"/><rect x="38" y="14" width="10" height="20"/><rect x="50" y="18" width="7" height="16"/><rect x="58" y="10" width="8" height="24"/></g><rect y="34" width="70" height="14" fill="${T.water}"/><rect y="48" width="70" height="22" fill="${T.stone}"/><path d="M0 44H70M0 50H70" stroke="${T.rail}" stroke-width="1.6"/><path d="M8 44V54M24 44V54M40 44V54M56 44V54" stroke="${T.rail}" stroke-width="1.4"/>` },
+    { id: '02', short: 'WASHINGTON ST', name: 'DUMBO — Washington Street', lngLat: [-73.9897, 40.7031],
+      desc: 'Cobblestone block where brick warehouses frame the Manhattan Bridge.',
+      thumb: `<rect width="70" height="70" fill="${T.sky2}"/><rect x="0" y="6" width="20" height="64" fill="${T.brick}"/><rect x="50" y="10" width="20" height="60" fill="${T.brick}"/><path d="M20 30H50M26 30V20H44V30" stroke="#6E8487" stroke-width="2.5" fill="none"/><rect x="30" y="14" width="10" height="16" fill="#6E8487"/><path d="M20 70L30 40H40L50 70Z" fill="${T.stone}"/><path d="M24 62H46M27 54H43M29 47H41" stroke="#4A4540" stroke-width="1.2"/>` },
+    { id: '03', short: 'PROMENADE', name: 'Brooklyn Heights Promenade', lngLat: [-73.9978, 40.6964],
+      desc: 'Elevated walkway above the BQE with views across the East River.',
+      thumb: `<rect width="70" height="30" fill="${T.sky}"/><g fill="${T.city}"><rect x="6" y="12" width="7" height="18"/><rect x="15" y="6" width="6" height="24"/><rect x="24" y="14" width="9" height="16"/><rect x="36" y="2" width="5" height="28"/><rect x="44" y="12" width="9" height="18"/><rect x="56" y="8" width="8" height="22"/></g><rect y="30" width="70" height="10" fill="${T.water}"/><rect y="40" width="70" height="30" fill="#4A4540"/><path d="M0 44H70" stroke="${T.rail}" stroke-width="2"/><g fill="${T.grass}"><circle cx="8" cy="58" r="9"/><circle cx="60" cy="60" r="10"/></g>` },
+    { id: '04', short: 'DOMINO PARK', name: 'Domino Park', lngLat: [-73.9683, 40.7141],
+      desc: 'Williamsburg waterfront park built around relics of the Domino Sugar Refinery.',
+      thumb: `<rect width="70" height="34" fill="${T.sky2}"/><rect x="38" y="8" width="26" height="26" fill="${T.brick}"/><rect x="44" y="2" width="8" height="8" fill="${T.brick}"/><path d="M6 34V12H22" stroke="#C9A98A" stroke-width="2" fill="none"/><rect y="34" width="70" height="36" fill="${T.grass}"/><path d="M0 52Q30 42 70 50" stroke="#8A7D62" stroke-width="4" fill="none"/><g fill="#2E4A2C"><circle cx="14" cy="40" r="7"/><circle cx="30" cy="38" r="6"/></g>` },
+  ];
+  const svgThumb = (s, w = 70, h = 70) => `<svg viewBox="0 0 70 70" width="${w}" height="${h}" preserveAspectRatio="xMidYMid slice" aria-hidden="true">${s.thumb}</svg>`;
+
+  const BOROUGH_CHIPS = [
+    { name: 'MANHATTAN', lngLat: [-73.940, 40.835], anchor: 'left' },
+    { name: 'BRONX', lngLat: [-73.868, 40.848] },
+    { name: 'QUEENS', lngLat: [-73.80, 40.71] },
+    { name: 'STATEN IS.', lngLat: [-74.14, 40.585] },
+  ];
+  const NEAR_LABELS = [
+    { html: '<div class="chip">MANHATTAN ↗</div>', lngLat: [-73.9975, 40.7128] },
+    { html: '<div class="chip">BROOKLYN BRIDGE</div>', lngLat: [-73.9972, 40.7064] },
+    { html: '<div class="chip">MANHATTAN BR.</div>', lngLat: [-73.9908, 40.7072] },
+    { html: '<div class="river">EAST RIVER</div>', lngLat: [-73.9815, 40.7080] },
+    { html: '<div class="ground-text">DUMBO</div>', lngLat: [-73.9858, 40.7008] },
+  ];
+
+  // Camera presets, picked per window shape when used.
+  function views() {
+    const portrait = innerWidth / innerHeight < 0.8;
+    return {
+      nyc: portrait
+        ? { center: [-73.970, 40.710], zoom: 9.0, pitch: 55, bearing: -20 }
+        : { center: [-73.930, 40.695], zoom: 10.45, pitch: 55, bearing: -28 },
+      // Tuned so all four pins clear the header and the bottom card (1440×900 and 390×844).
+      brooklyn: portrait
+        ? { center: [-73.9910, 40.7000], zoom: 13.9, pitch: 66, bearing: 30 }
+        : { center: [-73.9910, 40.7020], zoom: 14.8, pitch: 66, bearing: 10 },
+    };
+  }
+  const NEAR_ZOOM = 12.6;   // overview layers fade out / close-up layers fade in around here
+
+  // ---------- Style: everything comes from nyc.geojson (precomputed, local) ----------
+  const kind = (k) => ['==', ['get', 'kind'], k];
+  const fadeIn = (v) => ['interpolate', ['linear'], ['zoom'], NEAR_ZOOM, 0, NEAR_ZOOM + 0.8, v];
+  const fadeOut = (v) => ['interpolate', ['linear'], ['zoom'], NEAR_ZOOM - 0.8, v, NEAR_ZOOM, 0];
+  // Borough slabs sink into the ground while flying in, so the close-up ground takes over smoothly.
+  const SLAB_H = ['interpolate', ['linear'], ['zoom'], 9, 900, 11, 420, NEAR_ZOOM, 0];
+  const isBk = ['==', ['get', 'name'], 'Brooklyn'];
+
+  const STYLE = {
+    version: 8,
+    light: { anchor: 'viewport', color: '#ffffff', intensity: 0.3, position: [1.4, 200, 40] },
+    sources: {
+      nyc: { type: 'geojson', data: { type: 'FeatureCollection', features: [] } },
+      spots: { type: 'geojson', data: { type: 'FeatureCollection', features: [] } },
+    },
+    layers: [
+      { id: 'bg', type: 'background', paint: { 'background-color': '#060A09' } },
+      { id: 'rings', type: 'line', source: 'nyc', filter: kind('ring'), paint: { 'line-color': '#5EE6D0', 'line-opacity': fadeOut(0.1), 'line-width': 1 } },
+      // flat land under the close-up grid
+      { id: 'land', type: 'fill', source: 'nyc', filter: ['any', kind('shore'), ['all', kind('borough'), ['!', ['match', ['get', 'name'], ['Brooklyn', 'Manhattan'], true, false]]]],
+        paint: { 'fill-color': '#0A1513' } },
+      { id: 'bridge-glow', type: 'line', source: 'nyc', filter: kind('bridge'), minzoom: 11.5,
+        paint: { 'line-color': '#5EE6D0', 'line-width': ['interpolate', ['linear'], ['zoom'], 12, 3, 16, 14], 'line-blur': 6, 'line-opacity': 0.25 } },
+      { id: 'bridge', type: 'line', source: 'nyc', filter: kind('bridge'), minzoom: 11.5,
+        paint: { 'line-color': '#5EE6D0', 'line-width': ['interpolate', ['linear'], ['zoom'], 12, 1, 16, 4] } },
+      { id: 'blocks', type: 'fill-extrusion', source: 'nyc', filter: kind('block'), minzoom: NEAR_ZOOM - 0.2,
+        paint: { 'fill-extrusion-color': ['match', ['get', 't'], 0, '#14352F', '#112E29'], 'fill-extrusion-height': 6, 'fill-extrusion-base': 0,
+                 'fill-extrusion-opacity': fadeIn(0.95) } },
+      { id: 'towers', type: 'fill-extrusion', source: 'nyc', filter: kind('tower'), minzoom: NEAR_ZOOM - 0.2,
+        paint: { 'fill-extrusion-color': '#5EE6D0', 'fill-extrusion-height': ['get', 'h'], 'fill-extrusion-opacity': fadeIn(0.9) } },
+      { id: 'bars', type: 'fill-extrusion', source: 'nyc', filter: kind('bar'), minzoom: NEAR_ZOOM - 0.2,
+        paint: { 'fill-extrusion-color': ['interpolate', ['linear'], ['get', 'h'], 25, '#2E8F80', 80, '#5EE6D0', 200, '#9FFBEA'],
+                 'fill-extrusion-height': ['+', 6, ['get', 'h']], 'fill-extrusion-base': 6, 'fill-extrusion-opacity': fadeIn(0.7) } },
+      { id: 'slabs', type: 'fill-extrusion', source: 'nyc', filter: kind('borough'), maxzoom: NEAR_ZOOM + 0.2,
+        paint: { 'fill-extrusion-pattern': ['case', isBk, 'grid-lime', 'grid-teal'], 'fill-extrusion-height': SLAB_H, 'fill-extrusion-base': 0,
+                 'fill-extrusion-opacity': fadeOut(1) } },
+      { id: 'citybars', type: 'fill-extrusion', source: 'nyc', filter: kind('citybar'), maxzoom: NEAR_ZOOM + 0.2,
+        paint: { 'fill-extrusion-color': ['interpolate', ['linear'], ['get', 'h'], 110, '#3FB8A4', 250, '#5EE6D0', 400, '#9FFBEA'],
+                 'fill-extrusion-base': SLAB_H,
+                 'fill-extrusion-height': ['interpolate', ['linear'], ['zoom'], 9, ['+', 900, ['*', 3.2, ['get', 'h']]], 11, ['+', 420, ['*', 2, ['get', 'h']]], NEAR_ZOOM, 0],
+                 'fill-extrusion-opacity': fadeOut(0.9) } },
+      { id: 'boro-line', type: 'line', source: 'nyc', filter: ['all', kind('borough'), ['!', isBk]],
+        paint: { 'line-color': '#5EE6D0', 'line-width': 1.2, 'line-opacity': fadeOut(0.6) } },
+      // Brooklyn edge: glowing outline from far away, the waterfront line up close
+      // simplified outline while far away, detailed shoreline once close
+      { id: 'bk-glow-3', type: 'line', source: 'nyc', filter: ['all', ['step', ['zoom'], kind('borough'), NEAR_ZOOM - 0.4, kind('shore')], isBk],
+        paint: { 'line-color': '#C6FF3D', 'line-width': 16, 'line-blur': 12, 'line-opacity': 0.14 } },
+      { id: 'bk-glow-2', type: 'line', source: 'nyc', filter: ['all', ['step', ['zoom'], kind('borough'), NEAR_ZOOM - 0.4, kind('shore')], isBk],
+        paint: { 'line-color': '#C6FF3D', 'line-width': 6, 'line-blur': 4, 'line-opacity': 0.4 } },
+      { id: 'bk-line', type: 'line', source: 'nyc', filter: ['all', ['step', ['zoom'], kind('borough'), NEAR_ZOOM - 0.4, kind('shore')], isBk], layout: { 'line-join': 'round' },
+        paint: { 'line-color': '#C6FF3D', 'line-width': ['interpolate', ['linear'], ['zoom'], 10, 1.6, 15, 2.4] } },
+      { id: 'spot-dots', type: 'circle', source: 'spots', maxzoom: NEAR_ZOOM + 0.2,
+        paint: { 'circle-color': '#C6FF3D', 'circle-radius': 3.2, 'circle-blur': 0.2, 'circle-opacity': fadeOut(1),
+                 'circle-stroke-color': 'rgba(198,255,61,.35)', 'circle-stroke-width': 4, 'circle-stroke-opacity': fadeOut(1) } },
+    ],
+  };
+
+  // Grid textures for the borough slabs (generated once)
+  function gridImage(base, line) {
+    const s = 16, c = document.createElement('canvas'); c.width = c.height = s;
+    const g = c.getContext('2d');
+    g.fillStyle = base; g.fillRect(0, 0, s, s);
+    g.fillStyle = line; g.fillRect(0, 0, s, 1); g.fillRect(0, 0, 1, s);
+    return g.getImageData(0, 0, s, s);
+  }
+  const IMAGES = { 'grid-teal': () => gridImage('#0F2622', 'rgba(94,230,208,.38)'), 'grid-lime': () => gridImage('#1E2D08', 'rgba(198,255,61,.6)') };
+
+  // ---------- DOM ----------
+  const $ = (id) => document.getElementById(id);
+  const ui = {
+    veil: $('veil'), loading: $('veil-loading'), error: $('veil-error'), errMsg: $('err-msg'), retry: $('btn-retry'),
+    enter: $('btn-enter'), back: $('btn-back'),
+    hudNyc: $('hud-nyc'), hudBk: $('hud-bk'), legNyc: $('legend-nyc'), legBk: $('legend-bk'),
+    card: $('spot-card'), cardThumb: $('card-thumb'), cardTitle: $('card-title'), cardDesc: $('card-desc'), cardPill: $('card-pill'),
+    crumb: $('crumb-spot'), litCount: $('lit-count'), litSegs: $('lit-segs'),
+  };
+  const reducedMQ = matchMedia('(prefers-reduced-motion: reduce)');
+
+  // ---------- State ----------
+  let map = null, markers = [], pinEls = [], spinRaf = 0, loadTimer = 0, loaded = false;
+  let mode = 'nyc', target = 'nyc', flightToken = 0, near = false, selected = 0;
+  const lit = new Set();
+  const mapCleanups = [];
+  const onMap = (el, ev, fn, opt) => { el.addEventListener(ev, fn, opt); mapCleanups.push(() => el.removeEventListener(ev, fn, opt)); };
+
+  function showError(msg) {
+    clearTimeout(loadTimer);
+    ui.errMsg.textContent = msg;
+    ui.loading.hidden = true; ui.error.hidden = false; ui.veil.classList.remove('gone');
+  }
+
+  async function create() {
+    teardownMap();
+    ui.loading.hidden = false; ui.error.hidden = true; ui.veil.classList.remove('gone');
+    mode = target = 'nyc'; renderMode();
+
+    let data;
+    try {
+      const res = await fetch('nyc.geojson');
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      data = await res.json();
+    } catch (e) {
+      showError('Couldn’t read nyc.geojson. Open the page through the local server (python3 -m http.server), not by double-clicking the file.');
+      return;
+    }
+
+    try {
+      map = new maplibregl.Map({ container: 'map', style: STYLE, ...views().nyc, maxPitch: 75, antialias: true, attributionControl: false });
+    } catch (e) {
+      showError(/webgl/i.test(String(e)) ? 'This browser can’t start WebGL, which the 3D map needs.' : String(e.message || e));
+      return;
+    }
+    map.addControl(new maplibregl.AttributionControl({
+      compact: true,
+      customAttribution: 'Boroughs: <a href="https://data.cityofnewyork.us/d/gthc-hcne" target="_blank" rel="noopener">NYC Open Data</a> · Heights &amp; bridges: <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">© OpenStreetMap</a>',
+    }), 'bottom-right');
+
+    map.on('styleimagemissing', (e) => { if (IMAGES[e.id] && !map.hasImage(e.id)) map.addImage(e.id, IMAGES[e.id]()); });
+    map.on('error', (e) => { if (!loaded) showError(String(e.error?.message || e)); console.warn('[map]', e.error?.message || e); });
+    loadTimer = setTimeout(() => { if (!loaded) showError('The map took too long to start. Retry?'); }, 20000);
+
+    map.once('load', () => {
+      map.getSource('nyc').setData(data);
+      map.getSource('spots').setData({ type: 'FeatureCollection', features: SPOTS.map((s) => ({ type: 'Feature', properties: { id: s.id }, geometry: { type: 'Point', coordinates: s.lngLat } })) });
+      addMarkers();
+      onZoom();
+      map.once('idle', () => {
+        loaded = true;
+        clearTimeout(loadTimer);
+        if (innerWidth <= 520) map.getContainer().querySelector('.maplibregl-ctrl-attrib')?.classList.remove('maplibregl-compact-show');
+        ui.veil.classList.add('gone');
+        renderMode();
+        startSpin();
+      });
+    });
+    map.on('zoom', onZoom);
+    map.on('moveend', flipLabels);
+
+    const stop = () => stopSpin();
+    ['dragstart', 'zoomstart', 'rotatestart', 'pitchstart'].forEach((ev) => map.on(ev, (e) => { if (e.originalEvent) stop(); }));
+    const canvas = map.getCanvasContainer();
+    onMap(canvas, 'pointerdown', stop, { passive: true });
+    onMap(canvas, 'wheel', stop, { passive: true });
+    onMap(canvas, 'touchstart', stop, { passive: true });
+  }
+
+  function teardownMap() {
+    stopSpin(); clearTimeout(loadTimer); flightToken++;
+    markers.forEach((m) => m.remove()); markers = []; pinEls = [];
+    while (mapCleanups.length) mapCleanups.pop()();
+    if (map) { map.remove(); map = null; }
+    loaded = false;
+  }
+
+  // Only flips a class when the zoom crosses the threshold — no per-frame geometry work.
+  function onZoom() {
+    const n = map.getZoom() >= NEAR_ZOOM - 0.3;
+    if (n !== near) { near = n; document.body.classList.toggle('near', near); }
+  }
+
+  // Pins near the right edge show their label on the left. Runs on moveend only.
+  function flipLabels() {
+    pinEls.forEach((el, i) => el.classList.toggle('flip', map.project(SPOTS[i].lngLat).x > innerWidth - 150));
+  }
+
+  // ---------- Markers ----------
+  function addMarker(el, lngLat, anchor, cls) {
+    el.classList.add(cls);
+    markers.push(new maplibregl.Marker({ element: el, anchor }).setLngLat(lngLat).addTo(map));
+  }
+
+  function addMarkers() {
+    // Overview: borough chips + Brooklyn beam card
+    BOROUGH_CHIPS.forEach((b) => {
+      const el = document.createElement('div');
+      el.innerHTML = `<div class="chip"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>${b.name}</div>`;
+      el.setAttribute('aria-label', `${b.name} — coming soon`);
+      addMarker(el, b.lngLat, b.anchor || 'center', 'far-only');
+    });
+    const beam = document.createElement('button');
+    beam.type = 'button';
+    beam.className = 'beam-card';
+    beam.setAttribute('aria-label', 'Enter Brooklyn');
+    beam.innerHTML = `<div class="box"><div class="nm">BROOKLYN</div><div class="sb">${SPOTS.length} SPOTS · TAP TO LIGHT UP</div></div><div class="beam"></div>`;
+    beam.addEventListener('click', () => go('brooklyn'));
+    addMarker(beam, [-73.945, 40.645], 'bottom', 'far-only');
+
+    // Close-up: place labels + pins
+    NEAR_LABELS.forEach((l) => { const el = document.createElement('div'); el.innerHTML = l.html; addMarker(el, l.lngLat, 'center', 'near-only'); });
+    SPOTS.forEach((s, i) => {
+      const el = document.createElement('button');
+      el.type = 'button';
+      el.className = 'pin';
+      el.setAttribute('aria-label', `${s.id} ${s.name}. ${s.desc}`);
+      el.innerHTML = `<span class="drop"><span class="face">${svgThumb(s)}</span></span><span class="base"></span><span class="lbl chip"><span class="n">${s.id}</span>${s.short}</span>`;
+      el.addEventListener('click', (ev) => { ev.stopPropagation(); stopSpin(); select(i); });
+      pinEls.push(el);
+      addMarker(el, s.lngLat, 'bottom', 'near-only');
+    });
+    select(selected, false);
+    flipLabels();
+  }
+
+  function select(i, markLit = true) {
+    selected = i;
+    const s = SPOTS[i];
+    if (markLit) lit.add(i);
+    pinEls.forEach((el, j) => {
+      el.classList.toggle('on', j === i);
+      el.classList.toggle('lit', lit.has(j));
+      el.querySelector('.lbl').classList.toggle('lime', j === i);
+      el.setAttribute('aria-pressed', String(j === i));
+      el.style.zIndex = j === i ? 2 : 1;
+    });
+    ui.cardThumb.innerHTML = svgThumb(s, 112, 63);
+    ui.cardTitle.textContent = s.name;
+    ui.cardDesc.textContent = s.desc;
+    ui.cardPill.textContent = lit.has(i) ? `Spot ${s.id} · lit` : `Spot ${s.id} · next`;
+    ui.crumb.textContent = s.short;
+    ui.litCount.textContent = `${lit.size} / ${SPOTS.length}`;
+    [...ui.litSegs.children].forEach((seg, j) => seg.classList.toggle('lit', j < lit.size));
+  }
+
+  // ---------- Idle spin ----------
+  function startSpin() {
+    if (reducedMQ.matches || mode !== 'nyc' || spinRaf || !map) return;
+    let last = performance.now();
+    const step = (now) => {
+      const dt = Math.min(now - last, 64); last = now;
+      map.setBearing(map.getBearing() + dt * 0.003);   // ~3°/s at city scale
+      spinRaf = requestAnimationFrame(step);
+    };
+    spinRaf = requestAnimationFrame(step);
+  }
+  function stopSpin() { if (spinRaf) cancelAnimationFrame(spinRaf); spinRaf = 0; }
+
+  // ---------- Modes & camera ----------
+  function renderMode() {
+    const inBk = mode === 'brooklyn' || (mode === 'flying' && target === 'brooklyn');
+    ui.hudNyc.hidden = inBk; ui.legNyc.hidden = inBk; ui.enter.hidden = inBk;
+    ui.hudBk.hidden = !inBk; ui.legBk.hidden = !inBk; ui.card.hidden = !inBk;
+    ui.enter.disabled = ui.back.disabled = mode === 'flying' || !loaded;
+  }
+
+  function go(dest) {
+    if (!loaded || mode === 'flying' || mode === dest) return;
+    stopSpin();
+    target = dest; mode = 'flying'; renderMode();
+    const token = ++flightToken;
+    const cam = views()[dest];
+    map.once('moveend', () => {
+      if (token !== flightToken) return;
+      mode = dest; renderMode();
+      (dest === 'brooklyn' ? ui.back : ui.enter).focus({ preventScroll: true });
+    });
+    if (reducedMQ.matches) map.jumpTo(cam);
+    else map.flyTo({ ...cam, duration: dest === 'brooklyn' ? 4000 : 3200, curve: 1.2, essential: true });
+  }
+
+  // ---------- Wire up ----------
+  ui.enter.addEventListener('click', () => go('brooklyn'));
+  ui.back.addEventListener('click', () => go('nyc'));
+  ui.retry.addEventListener('click', () => (window.maplibregl ? create() : location.reload()));
+  const onReduced = () => { if (reducedMQ.matches) stopSpin(); };
+  reducedMQ.addEventListener('change', onReduced);
+  window.addEventListener('pagehide', () => { teardownMap(); reducedMQ.removeEventListener('change', onReduced); }, { once: true });
+
+  if (!window.maplibregl) showError('lib/maplibre-gl.js is missing.');
+  else create();
+
+  window.__nycMap = { get map() { return map; }, go, views, select };
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,471 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#000000">
+<title>Explore New York</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 34 44'%3E%3Cpath d='M17 43C17 43 2 26.5 2 16a15 15 0 0 1 30 0c0 10.5-15 27-15 27z' fill='%23C6FF3D'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Anton&family=JetBrains+Mono:wght@400;500;700&family=Space+Grotesk:wght@400;500;700&display=swap" rel="stylesheet">
+<link href="https://unpkg.com/maplibre-gl@5.6.0/dist/maplibre-gl.css" rel="stylesheet">
+<style>
+  /* Tokens — same palette as Just Standup (M1/M2 design boards) */
+  :root {
+    --bg: #000000;
+    --water: #070B0A;
+    --ink: #0B0F0E;
+    --card: #121917;
+    --line: #1A2321;
+    --text: #EDF3EF;
+    --soft: #8FA39A;
+    --teal: #5EE6D0;
+    --lime: #C6FF3D;
+    --lime-hover: #D4FF66;
+    --safe-b: env(safe-area-inset-bottom, 0px);
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text); font-family: 'Space Grotesk', system-ui, sans-serif; overflow: hidden; }
+  button { font: inherit; cursor: pointer; }
+  .mono { font-family: 'JetBrains Mono', ui-monospace, monospace; }
+  #map { position: fixed; inset: 0; }
+
+  /* Header */
+  .hud { position: fixed; top: 0; left: 0; right: 0; padding: max(16px, env(safe-area-inset-top)) 16px 0; pointer-events: none; z-index: 2; }
+  .hud-row { display: flex; justify-content: space-between; align-items: center; }
+  .brand { font-family: 'Anton', sans-serif; font-size: 18px; line-height: 1; letter-spacing: .02em; color: var(--ink); background: var(--lime); padding: 6px 10px 5px; border-radius: 6px; transform: skewX(-8deg); box-shadow: 0 0 20px rgba(198,255,61,.35); }
+  .coords { margin-right: 44px; font-size: 10px; letter-spacing: .08em; color: var(--teal); opacity: .75; }
+  h1 { margin: 12px 0 0; font-family: 'Anton', sans-serif; font-weight: 400; font-size: clamp(34px, 6vw, 56px); line-height: .95; text-transform: uppercase; text-shadow: 0 2px 18px rgba(0,0,0,.9); }
+  h1 .accent { color: var(--teal); }
+  h1 .dot { color: var(--lime); }
+  .sub { margin-top: 8px; font-size: 11px; letter-spacing: .1em; color: var(--soft); text-shadow: 0 1px 8px #000; }
+  .sub b { color: var(--text); font-weight: 500; }
+
+  /* Bottom CTA — sits above the attribution strip */
+  .dock { position: fixed; left: 16px; right: 16px; bottom: calc(44px + var(--safe-b)); display: flex; justify-content: center; z-index: 2; pointer-events: none; }
+  .cta { pointer-events: auto; height: 56px; min-width: 240px; padding: 0 28px; border: 0; border-radius: 16px; background: var(--lime); color: var(--ink); font-size: 16px; font-weight: 700; display: inline-flex; align-items: center; justify-content: center; gap: 10px; box-shadow: 0 0 32px rgba(198,255,61,.25); transition: background .15s, opacity .2s; }
+  .cta:hover { background: var(--lime-hover); }
+  .cta.ghost { background: rgba(18,25,23,.92); color: var(--text); border: 1px solid rgba(198,255,61,.35); box-shadow: none; }
+  .cta.ghost:hover { background: #1A2321; }
+  .cta:disabled { opacity: .45; cursor: progress; }
+  .cta:focus-visible, .pin:focus-visible, .retry:focus-visible { outline: 2px solid var(--text); outline-offset: 3px; }
+  .cta[hidden] { display: none; }
+
+  /* Pins — inverted teardrop */
+  .pin { width: 34px; height: 44px; padding: 0; border: 0; background: none; display: block; filter: drop-shadow(0 0 6px rgba(198,255,61,.55)); transition: filter .2s, transform .2s; transform-origin: 50% 100%; }
+  .pin:hover, .pin.on { filter: drop-shadow(0 0 12px rgba(198,255,61,.9)); transform: scale(1.12); }
+  .pin svg { display: block; overflow: visible; }
+  .pin text { font: 700 11px 'JetBrains Mono', monospace; fill: var(--ink); }
+
+  /* Popups */
+  .maplibregl-popup-content { background: var(--card); color: var(--text); border: 1px solid rgba(198,255,61,.35); border-radius: 14px; padding: 12px 34px 12px 14px; box-shadow: 0 0 24px rgba(0,0,0,.6); font-family: 'Space Grotesk', sans-serif; }
+  .maplibregl-popup-anchor-bottom .maplibregl-popup-tip { border-top-color: rgba(198,255,61,.35); }
+  .maplibregl-popup-anchor-top .maplibregl-popup-tip { border-bottom-color: rgba(198,255,61,.35); }
+  .maplibregl-popup-close-button { color: var(--soft); font-size: 18px; width: 28px; height: 28px; top: 4px; right: 4px; border-radius: 8px; }
+  .maplibregl-popup-close-button:hover { background: var(--line); color: var(--text); }
+  .pop-k { font-size: 10px; letter-spacing: .08em; color: var(--lime); }
+  .pop-t { margin: 2px 0 4px; font-weight: 700; font-size: 15px; white-space: nowrap; }
+  .pop-d { font-size: 13px; line-height: 1.4; color: var(--soft); }
+
+  /* Attribution — dark, compact */
+  .maplibregl-ctrl-attrib { background: rgba(0,0,0,.65) !important; color: var(--soft); font-size: 10px; }
+  .maplibregl-ctrl-attrib a { color: var(--soft); }
+  .maplibregl-ctrl-attrib-button { filter: invert(1) opacity(.6); }
+  .maplibregl-ctrl-group { background: rgba(18,25,23,.9); }
+  .maplibregl-ctrl-group button + button { border-top-color: var(--line); }
+  .maplibregl-ctrl-group button .maplibregl-ctrl-icon { filter: invert(1) opacity(.75); }
+
+  /* Loading / error */
+  .veil { position: fixed; inset: 0; z-index: 5; display: flex; align-items: center; justify-content: center; background: var(--bg); transition: opacity .6s; }
+  .veil.gone { opacity: 0; pointer-events: none; }
+  .veil-box { text-align: center; padding: 24px; max-width: 320px; }
+  .veil-k { font-size: 11px; letter-spacing: .12em; color: var(--teal); }
+  .bar { margin: 14px auto 0; width: 160px; height: 3px; border-radius: 2px; background: var(--line); overflow: hidden; }
+  .bar i { display: block; width: 40%; height: 100%; background: var(--lime); box-shadow: 0 0 8px var(--lime); animation: slide 1.2s ease-in-out infinite; }
+  @keyframes slide { 0% { transform: translateX(-100%); } 100% { transform: translateX(250%); } }
+  .err-t { margin: 10px 0 6px; font-size: 18px; font-weight: 700; }
+  .err-d { font-size: 13px; color: var(--soft); line-height: 1.45; }
+  .retry { margin-top: 16px; height: 44px; padding: 0 22px; border: 0; border-radius: 12px; background: var(--lime); color: var(--ink); font-weight: 700; }
+  .toast { position: fixed; left: 50%; top: calc(max(16px, env(safe-area-inset-top)) + 120px); transform: translateX(-50%); z-index: 4; display: flex; gap: 10px; align-items: center; padding: 8px 8px 8px 14px; border-radius: 12px; background: var(--card); border: 1px solid rgba(255,138,128,.4); font-size: 12px; color: var(--text); white-space: nowrap; }
+  .toast .retry { margin: 0; height: 30px; padding: 0 12px; font-size: 12px; border-radius: 8px; }
+  [hidden] { display: none !important; }
+
+  @media (max-width: 520px) {
+    .cta { width: 100%; min-width: 0; }
+    .dock { bottom: calc(52px + var(--safe-b)); }
+    .pop-t { white-space: normal; }
+    .coords { display: none; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .bar i { animation: none; width: 100%; }
+    .pin, .cta, .veil { transition: none; }
+  }
+</style>
+</head>
+<body>
+<div id="map" aria-label="3D map of New York City"></div>
+
+<header class="hud">
+  <div class="hud-row">
+    <div class="brand">JUST STANDUP</div>
+    <div class="coords mono" id="coords">NYC · 40.71°N 74.00°W</div>
+  </div>
+  <h1 id="title">Explore<br><span class="accent">New York.</span></h1>
+  <div class="sub mono" id="sub">BROOKLYN · <b>4 SPOTS</b> READY</div>
+</header>
+
+<div class="dock">
+  <button class="cta" id="btn-enter" type="button" disabled>Enter Brooklyn
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+  </button>
+  <button class="cta ghost" id="btn-back" type="button" hidden>
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 12H5M11 6l-6 6 6 6"/></svg>
+    Back to NYC
+  </button>
+</div>
+
+<div class="veil" id="veil" role="status" aria-live="polite">
+  <div class="veil-box">
+    <div id="veil-loading">
+      <div class="veil-k mono">LOADING NEW YORK…</div>
+      <div class="bar"><i></i></div>
+    </div>
+    <div id="veil-error" hidden>
+      <div class="veil-k mono" style="color:#ff8a80">MAP FAILED TO LOAD</div>
+      <div class="err-t">Can’t reach the map</div>
+      <div class="err-d" id="err-msg">Check your connection and try again.</div>
+      <button class="retry" id="btn-retry" type="button">Retry</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast" role="alert" hidden>
+  <span>Brooklyn boundary didn’t load</span>
+  <button class="retry" id="btn-retry-boundary" type="button">Retry</button>
+</div>
+
+<script src="https://unpkg.com/maplibre-gl@5.6.0/dist/maplibre-gl.js"></script>
+<script>
+(() => {
+  'use strict';
+
+  // ---------- Data ----------
+  const C = { water: '#070B0A', bg: '#000000', teal: '#5EE6D0', lime: '#C6FF3D' };
+
+  // Verified against OpenStreetMap (Nominatim) on 2026-10-15.
+  const SPOTS = [
+    { id: '01', name: 'Brooklyn Bridge Park — Pier 1', lngLat: [-73.9962, 40.7027],
+      desc: 'Lawns and a waterfront path facing the Lower Manhattan skyline.' },
+    { id: '02', name: 'DUMBO — Washington Street', lngLat: [-73.9897, 40.7031],
+      desc: 'Cobblestone block where brick warehouses frame the Manhattan Bridge.' },
+    { id: '03', name: 'Brooklyn Heights Promenade', lngLat: [-73.9978, 40.6964],
+      desc: 'Elevated walkway above the BQE with views across the East River.' },
+    { id: '04', name: 'Domino Park', lngLat: [-73.9683, 40.7141],
+      desc: 'Williamsburg waterfront park built around relics of the Domino Sugar Refinery.' },
+  ];
+
+  // Camera presets, picked per window shape at the moment they are used.
+  function views() {
+    const portrait = innerWidth / innerHeight < 0.8;
+    return {
+      nyc: portrait
+        ? { center: [-74.0090, 40.7070], zoom: 14.05, pitch: 58, bearing: -20 }
+        : { center: [-74.0035, 40.7105], zoom: 14.1, pitch: 58, bearing: -32 },
+      // Tuned so all four pins clear the header and the CTA (desktop 1440×900, phone 390×844).
+      brooklyn: portrait
+        ? { center: [-73.9910, 40.7040], zoom: 14.6, pitch: 68, bearing: 50 }
+        : { center: [-73.9910, 40.7040], zoom: 15.0, pitch: 68, bearing: 10 },
+    };
+  }
+
+  // ---------- Style (OpenFreeMap vector tiles, OpenMapTiles schema) ----------
+  const notTunnel = ['!=', ['get', 'brunnel'], 'tunnel'];
+  const roadClass = (list) => ['match', ['get', 'class'], list, true, false];
+  const road = (id, classes, color, widths, extra = {}) => ({
+    id, type: 'line', source: 'omt', 'source-layer': 'transportation', minzoom: extra.minzoom ?? 9,
+    filter: ['all', notTunnel, roadClass(classes), ['match', ['geometry-type'], ['LineString', 'MultiLineString'], true, false]],
+    layout: { 'line-cap': 'round', 'line-join': 'round' },
+    paint: { 'line-color': color, 'line-width': ['interpolate', ['exponential', 1.6], ['zoom'], ...widths], 'line-opacity': extra.opacity ?? 1 },
+  });
+
+  const STYLE = {
+    version: 8,
+    glyphs: 'https://tiles.openfreemap.org/fonts/{fontstack}/{range}.pbf',
+    light: { anchor: 'viewport', color: '#ffffff', intensity: 0.38, position: [1.4, 200, 35] },
+    sources: {
+      omt: { type: 'vector', url: 'https://tiles.openfreemap.org/planet' },
+      // Brooklyn boundary; data is fetched after load so a failure doesn't block the map
+      brooklyn: { type: 'geojson', data: { type: 'FeatureCollection', features: [] } },
+    },
+    layers: [
+      { id: 'bg', type: 'background', paint: { 'background-color': C.bg } },
+      { id: 'park', type: 'fill', source: 'omt', 'source-layer': 'park', paint: { 'fill-color': '#05110E' } },
+      { id: 'water', type: 'fill', source: 'omt', 'source-layer': 'water', filter: notTunnel, paint: { 'fill-color': C.water } },
+
+      road('road-minor', ['minor', 'service'], '#0E2622', [12, 0.3, 16, 3, 18, 8], { minzoom: 12.5 }),
+      road('road-mid', ['secondary', 'tertiary'], '#164039', [10, 0.4, 16, 4, 18, 10]),
+      road('road-major', ['primary', 'trunk', 'motorway'], '#1D5A50', [8, 0.5, 16, 6, 18, 14]),
+      // Bridges get a touch more light so Brooklyn/Manhattan Bridge read across the river
+      {
+        id: 'bridges', type: 'line', source: 'omt', 'source-layer': 'transportation', minzoom: 11,
+        filter: ['all', ['==', ['get', 'brunnel'], 'bridge'], roadClass(['motorway', 'trunk', 'primary', 'secondary', 'tertiary', 'minor', 'rail', 'transit'])],
+        paint: { 'line-color': '#2C8576', 'line-width': ['interpolate', ['exponential', 1.6], ['zoom'], 11, 0.6, 16, 4, 18, 10] },
+      },
+
+      // Brooklyn (GeoJSON added at runtime) — fill + layered glow lines, all below buildings
+      { id: 'bk-fill', type: 'fill', source: 'brooklyn', paint: { 'fill-color': C.lime, 'fill-opacity': 0.05 } },
+      { id: 'bk-glow-3', type: 'line', source: 'brooklyn', paint: { 'line-color': C.lime, 'line-width': 16, 'line-blur': 12, 'line-opacity': 0.12 } },
+      { id: 'bk-glow-2', type: 'line', source: 'brooklyn', paint: { 'line-color': C.lime, 'line-width': 6, 'line-blur': 4, 'line-opacity': 0.35 } },
+      { id: 'bk-line', type: 'line', source: 'brooklyn', layout: { 'line-join': 'round' }, paint: { 'line-color': C.lime, 'line-width': 1.6 } },
+
+      // 3D buildings. hide_3d marks outlines that also have building:part pieces — skip them to avoid double geometry.
+      // render_height comes from OSM height / levels; OpenMapTiles fills gaps with a schema default, and
+      // anything still missing falls back to 10 m here. These are estimates, not surveyed heights.
+      {
+        id: 'buildings', type: 'fill-extrusion', source: 'omt', 'source-layer': 'building', minzoom: 13,
+        filter: ['!', ['to-boolean', ['get', 'hide_3d']]],
+        paint: {
+          'fill-extrusion-color': ['interpolate', ['linear'], ['coalesce', ['get', 'render_height'], 10],
+            0, '#1F7A6C', 30, '#3FB8A4', 90, C.teal, 220, '#9FFBEA'],
+          'fill-extrusion-height': ['coalesce', ['get', 'render_height'], 10],
+          'fill-extrusion-base': ['coalesce', ['get', 'render_min_height'], 0],
+          'fill-extrusion-opacity': ['interpolate', ['linear'], ['zoom'], 13, 0, 13.6, 0.6],
+          'fill-extrusion-vertical-gradient': true,
+        },
+      },
+
+      // Labels: water + borough/neighbourhood names only
+      {
+        id: 'water-name', type: 'symbol', source: 'omt', 'source-layer': 'water_name',
+        filter: ['match', ['geometry-type'], ['LineString', 'MultiLineString'], true, false],
+        layout: { 'symbol-placement': 'line', 'text-field': ['coalesce', ['get', 'name_en'], ['get', 'name']], 'text-font': ['Noto Sans Italic'], 'text-size': 12, 'text-letter-spacing': 0.2 },
+        paint: { 'text-color': '#3E8C80', 'text-halo-color': C.bg, 'text-halo-width': 1 },
+      },
+      {
+        id: 'place-borough', type: 'symbol', source: 'omt', 'source-layer': 'place',
+        filter: ['match', ['get', 'class'], ['city', 'borough', 'suburb'], true, false],
+        layout: { 'text-field': ['upcase', ['coalesce', ['get', 'name_en'], ['get', 'name']]], 'text-font': ['Noto Sans Bold'], 'text-size': 13, 'text-letter-spacing': 0.15 },
+        paint: { 'text-color': '#9FB8AE', 'text-halo-color': C.bg, 'text-halo-width': 1.2 },
+      },
+      {
+        id: 'place-hood', type: 'symbol', source: 'omt', 'source-layer': 'place', minzoom: 14,
+        filter: ['match', ['get', 'class'], ['neighbourhood', 'quarter'], true, false],
+        layout: { 'text-field': ['upcase', ['coalesce', ['get', 'name_en'], ['get', 'name']]], 'text-font': ['Noto Sans Regular'], 'text-size': 10, 'text-letter-spacing': 0.12 },
+        paint: { 'text-color': '#5F7A70', 'text-halo-color': C.bg, 'text-halo-width': 1 },
+      },
+    ],
+  };
+
+  // ---------- DOM ----------
+  const $ = (id) => document.getElementById(id);
+  const ui = {
+    veil: $('veil'), loading: $('veil-loading'), error: $('veil-error'), errMsg: $('err-msg'),
+    enter: $('btn-enter'), back: $('btn-back'), retry: $('btn-retry'),
+    toast: $('toast'), retryBoundary: $('btn-retry-boundary'),
+    title: $('title'), sub: $('sub'), coords: $('coords'),
+  };
+  const reducedMQ = matchMedia('(prefers-reduced-motion: reduce)');
+
+  // ---------- Map lifecycle ----------
+  let map = null, markers = [], popup = null, spinRaf = 0, loadTimer = 0, loaded = false;
+  let mode = 'nyc';          // 'nyc' | 'flying' | 'brooklyn'
+  let target = 'nyc';        // destination while flying
+  let flightToken = 0;
+  const mapCleanups = [];    // listeners tied to the current map instance
+  const onMap = (el, ev, fn, opt) => { el.addEventListener(ev, fn, opt); mapCleanups.push(() => el.removeEventListener(ev, fn, opt)); };
+
+  function showError(msg) {
+    clearTimeout(loadTimer);
+    ui.errMsg.textContent = msg;
+    ui.loading.hidden = true;
+    ui.error.hidden = false;
+    ui.veil.classList.remove('gone');
+  }
+
+  function create() {
+    teardownMap();
+    ui.loading.hidden = false; ui.error.hidden = true; ui.veil.classList.remove('gone');
+    mode = 'nyc'; target = 'nyc'; loaded = false; renderMode();
+
+    try {
+      map = new maplibregl.Map({
+        container: 'map', style: STYLE, ...views().nyc,
+        maxPitch: 75, antialias: true, attributionControl: false,
+      });
+    } catch (e) {
+      showError(/webgl/i.test(String(e)) ? 'This browser can’t start WebGL, which the 3D map needs.' : String(e.message || e));
+      return;
+    }
+    map.addControl(new maplibregl.AttributionControl({
+      compact: true,
+      // OpenFreeMap / OpenMapTiles / OSM credits come from the tile source itself
+      customAttribution: 'Boundary: <a href="https://data.cityofnewyork.us/d/gthc-hcne" target="_blank" rel="noopener">NYC Open Data</a>',
+    }), 'bottom-right');
+    map.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), 'top-right');
+
+    loadTimer = setTimeout(() => { if (!loaded) showError('The map took too long to load. Check your connection and retry.'); }, 25000);
+
+    map.on('error', (e) => {
+      // Missing individual tiles are non-fatal; only fail hard before first load.
+      if (!loaded) showError('Map tiles couldn’t be reached (OpenFreeMap). ' + (e.error?.message || ''));
+      console.warn('[map]', e.error?.message || e);
+    });
+
+    map.once('load', () => {
+      loaded = true;
+      clearTimeout(loadTimer);
+      // Start with the credits collapsed to the (i) button on phones so they never sit under the CTA
+      if (innerWidth <= 520) map.getContainer().querySelector('.maplibregl-ctrl-attrib')?.classList.remove('maplibregl-compact-show');
+      ui.veil.classList.add('gone');
+      renderMode();
+      addMarkers();
+      loadBoundary();
+      map.once('idle', startSpin);
+    });
+
+    // Any direct manipulation stops the idle spin
+    const stop = () => stopSpin();
+    ['dragstart', 'zoomstart', 'rotatestart', 'pitchstart'].forEach((ev) =>
+      map.on(ev, (e) => { if (e.originalEvent) stop(); }));
+    const canvas = map.getCanvasContainer();
+    onMap(canvas, 'pointerdown', stop, { passive: true });
+    onMap(canvas, 'wheel', stop, { passive: true });
+    onMap(canvas, 'touchstart', stop, { passive: true });
+  }
+
+  function teardownMap() {
+    stopSpin();
+    clearTimeout(loadTimer);
+    flightToken++;
+    markers.forEach((m) => m.remove()); markers = [];
+    if (popup) { popup.remove(); popup = null; }
+    while (mapCleanups.length) mapCleanups.pop()();
+    if (map) { map.remove(); map = null; }
+    loaded = false;
+  }
+
+  async function loadBoundary() {
+    ui.toast.hidden = true;
+    try {
+      const res = await fetch('brooklyn.geojson', { cache: 'force-cache' });
+      if (!res.ok) throw new Error(res.status);
+      const gj = await res.json();
+      map?.getSource('brooklyn')?.setData(gj);
+    } catch (e) {
+      console.warn('[brooklyn]', e);
+      ui.toast.hidden = false;
+    }
+  }
+
+  // ---------- Idle spin ----------
+  function startSpin() {
+    if (reducedMQ.matches || mode !== 'nyc' || spinRaf || !map) return;
+    let last = performance.now();
+    const step = (now) => {
+      const dt = Math.min(now - last, 64); last = now;
+      map.setBearing(map.getBearing() + dt * 0.0016);   // ~1.6°/s
+      spinRaf = requestAnimationFrame(step);
+    };
+    spinRaf = requestAnimationFrame(step);
+  }
+  function stopSpin() { if (spinRaf) cancelAnimationFrame(spinRaf); spinRaf = 0; }
+
+  // ---------- Pins ----------
+  const PIN_SVG = (n) => `
+    <svg width="34" height="44" viewBox="0 0 34 44" aria-hidden="true">
+      <path d="M17 43 C17 43 2 26.5 2 16 A15 15 0 0 1 32 16 C32 26.5 17 43 17 43 Z" fill="#C6FF3D" stroke="#0B0F0E" stroke-width="1.5"/>
+      <circle cx="17" cy="16" r="9.5" fill="#E3FF9E" opacity=".35"/>
+      <text x="17" y="20" text-anchor="middle">${n}</text>
+    </svg>`;
+
+  function addMarkers() {
+    const o = 44;
+    popup = new maplibregl.Popup({
+      offset: { top: [0, 0], bottom: [0, -o], left: [16, -o / 2], right: [-16, -o / 2], 'top-left': [0, 0], 'top-right': [0, 0], 'bottom-left': [0, -o], 'bottom-right': [0, -o] },
+      closeButton: true, closeOnClick: true, maxWidth: 'min(300px, calc(100vw - 150px))', focusAfterOpen: false,
+    });
+    popup.on('close', () => markers.forEach((m) => m.getElement().classList.remove('on')));
+    SPOTS.forEach((s) => {
+      const el = document.createElement('button');
+      el.type = 'button';
+      el.className = 'pin';
+      el.setAttribute('aria-label', `${s.name}. ${s.desc}`);
+      el.innerHTML = PIN_SVG(s.id);
+      el.addEventListener('click', (ev) => {
+        ev.stopPropagation();
+        stopSpin();
+        markers.forEach((m) => m.getElement().classList.remove('on'));
+        el.classList.add('on');
+        popup.setLngLat(s.lngLat)
+          .setHTML(`<div class="pop-k mono">SPOT ${s.id}</div><div class="pop-t">${s.name}</div><div class="pop-d">${s.desc}</div>`)
+          .addTo(map);
+      });
+      markers.push(new maplibregl.Marker({ element: el, anchor: 'bottom' }).setLngLat(s.lngLat).addTo(map));
+    });
+  }
+
+  // ---------- Camera moves ----------
+  function renderMode() {
+    const inBk = mode === 'brooklyn' || (mode === 'flying' && target === 'brooklyn');
+    ui.enter.hidden = inBk;
+    ui.back.hidden = !inBk;
+    ui.enter.disabled = ui.back.disabled = mode === 'flying' || !loaded;
+    if (inBk) {
+      ui.title.innerHTML = 'Brooklyn<span class="dot">.</span>';
+      ui.sub.innerHTML = 'NEW YORK / <b style="color:#C6FF3D">BROOKLYN</b> · 4 SPOTS';
+      ui.coords.textContent = 'BKN · 40.70°N 73.99°W';
+    } else {
+      ui.title.innerHTML = 'Explore<br><span class="accent">New York.</span>';
+      ui.sub.innerHTML = 'BROOKLYN · <b>4 SPOTS</b> READY';
+      ui.coords.textContent = 'NYC · 40.71°N 74.00°W';
+    }
+  }
+
+  function go(dest) {
+    if (!loaded || mode === 'flying' || mode === dest) return;
+    stopSpin();
+    popup?.remove();
+    target = dest;
+    mode = 'flying';
+    renderMode();
+    const token = ++flightToken;
+    const cam = views()[dest];
+    const done = () => {
+      if (token !== flightToken) return;
+      mode = dest;
+      renderMode();
+      (dest === 'brooklyn' ? ui.back : ui.enter).focus({ preventScroll: true });
+    };
+    map.once('moveend', done);
+    if (reducedMQ.matches) {
+      map.jumpTo(cam);
+    } else {
+      // minZoom keeps the arc at z14+, where tiles carry building heights (z13 tiles are flat)
+      map.flyTo({ ...cam, duration: dest === 'brooklyn' ? 4000 : 3200, minZoom: 14, essential: true });
+    }
+  }
+
+  // ---------- Wire up ----------
+  ui.enter.addEventListener('click', () => go('brooklyn'));
+  ui.back.addEventListener('click', () => go('nyc'));
+  ui.retry.addEventListener('click', () => (window.maplibregl ? create() : location.reload()));
+  ui.retryBoundary.addEventListener('click', loadBoundary);
+  const onReduced = () => { if (reducedMQ.matches) stopSpin(); };
+  reducedMQ.addEventListener('change', onReduced);
+
+  // Page unload: drop the map, rAF loop and listeners.
+  window.addEventListener('pagehide', () => {
+    teardownMap();
+    reducedMQ.removeEventListener('change', onReduced);
+  }, { once: true });
+
+  if (!window.maplibregl) showError('The map library didn’t load (unpkg.com). Check your connection and retry.');
+  else create();
+
+  // Handle for poking at it from DevTools
+  window.__nycMap = { get map() { return map; }, go, views };
+})();
+</script>
+</body>
+</html>
