@@ -58,7 +58,9 @@ set -a; source .env; source config/surreal.env; set +a
 python deploy/deploy_daytona.py up              # first time: builds the planner snapshot (~2 min), prints URL + QR
 python deploy/deploy_daytona.py up              # later: push code / refreshed credentials, keeps the URL
 python deploy/deploy_daytona.py up --recreate   # new server sandbox (new URL), e.g. after network changes
-python deploy/deploy_daytona.py down            # delete everything on Daytona
+python deploy/deploy_daytona.py down            # delete this instance's sandboxes on Daytona
+
+STANDUP_INSTANCE=alice python deploy/deploy_daytona.py up   # your own server (own URL); default instance: "shared"
 ```
 
 Open the printed URL on a phone, or show `<url>/qr` on a laptop. The first browser visit shows Daytona's preview

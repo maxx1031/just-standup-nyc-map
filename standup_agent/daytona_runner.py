@@ -68,7 +68,7 @@ def run_upload(video, photos, out, vlm="bedrock", n=3, frames=16, region="us-wes
             creds["BEDROCK_API_KEY"] = (BEDROCK_SECRET, bedrock_token(region, ttl + 10), bedrock_host)
         if T.enabled():
             creds["ARIZE_API_KEY"] = (ARIZE_SECRET, os.environ["ARIZE_API_KEY"], "otlp.arize.com")
-            env.update(ARIZE_SPACE_ID=os.environ["ARIZE_SPACE_ID"], ARIZE_PROJECT_NAME=T.PROJECT,
+            env.update(ARIZE_SPACE_ID=os.environ["ARIZE_SPACE_ID"], ARIZE_PROJECT_NAME=T.project(),
                        STANDUP_ARIZE_TRANSPORT="http")
         with T.span("secrets.refresh", "CHAIN", input={k: v[2] for k, v in creds.items()}) as s:
             try:

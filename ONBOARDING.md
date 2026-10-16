@@ -67,13 +67,26 @@ python -m standup_agent.run --video samples/office.mp4 --out out --vlm bedrock -
 
 ## 5. Deploying (coordinate first!)
 
+**Your own server (do this for testing):** set `STANDUP_INSTANCE` to your name. You get a separate server sandbox with
+its own URL and QR, and `up` / `down` only touch your sandboxes:
+
+```bash
+STANDUP_INSTANCE=<your-name> python deploy/deploy_daytona.py up     # create/update your server, prints URL + QR
+STANDUP_INSTANCE=<your-name> python deploy/deploy_daytona.py down   # delete only your sandboxes
+```
+
+(Or put `STANDUP_INSTANCE=<your-name>` in your `.env`.) Every instance uses the same SurrealDB Cloud database and
+Bedrock account, and the planner snapshot is shared.
+
+**The team's demo server** is the `shared` instance (no `STANDUP_INSTANCE` set):
+
 ```bash
 python deploy/deploy_daytona.py up      # push your local code + credentials to THE shared server (same URL)
 ```
 
-⚠️ There is **one** shared server. `up` from anyone in the org overwrites it with *their* working copy, so say in
-chat before you deploy, and deploy from an up-to-date `main`. `up --recreate` makes a new server (**new URL, the
-old QR stops working**). `down` deletes everything on Daytona.
+⚠️ `up` without `STANDUP_INSTANCE` overwrites the shared demo server with *your* working copy, so say in chat
+before you deploy, and deploy from an up-to-date `main`. `up --recreate` makes a new server (**new URL, the old QR
+stops working**). `down` deletes that instance's sandboxes on Daytona.
 
 AWS credentials expired? Put fresh ones in `.env`, `source` it, and run `up` again. Nothing is recreated.
 

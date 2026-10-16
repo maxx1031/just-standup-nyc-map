@@ -3,6 +3,9 @@
 python deploy/deploy_daytona.py up        # build the planner snapshot if needed, create/update the server, print a QR
 python deploy/deploy_daytona.py down      # delete the server sandbox (and any leftover planner sandboxes)
 
+STANDUP_INSTANCE=<name> gives you your own server (own URL) instead of the team's "shared" one; up/down only touch
+sandboxes of that instance. The planner snapshot is shared by all instances.
+
 * Server sandbox (long-running, public preview URL): FastAPI web app + SurrealDB (rocksdb, on the sandbox disk).
 * Planner snapshot, built from deploy/planner_image.py (Python + Claude/Arize/OpenCV deps; its entrypoint fetches the
   planner code and one job from the server over the link network). Each upload gets a fresh linked, ephemeral sandbox
@@ -30,13 +33,23 @@ ROOT = Path(__file__).resolve().parents[1]
 APP_FILES = ["webapp/__init__.py", "webapp/server.py", "webapp/db.py", "webapp/index.html",
              "standup_agent/__init__.py", "standup_agent/reasoner.py", "standup_agent/run.py",
              "standup_agent/tracing.py", "standup_agent/worker.py", "standup_agent/catalog.json"]
+APP_FILES += sorted(str(f.relative_to(ROOT)) for f in (ROOT / "samples" / "scenes").glob("*.*"))  # sample scenes
 SERVER_DEPS = ["fastapi", "uvicorn[standard]", "python-multipart", "surrealdb>=2", "daytona>=0.224.1", "boto3",
                "aws-bedrock-token-generator", "arize-otel>=0.14", "qrcode[pil]", "numpy"]
 SURREAL_VERSION = "v3.3.0"
 ENV_KEYS = ["DAYTONA_API_KEY", "AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_SESSION_TOKEN", "AWS_REGION",
             "AWS_DEFAULT_REGION", "ARIZE_SPACE_ID", "ARIZE_API_KEY", "ARIZE_PROJECT_NAME", "STANDUP_VLM",
             "SURREAL_URL", "SURREAL_USER", "SURREAL_PASS", "SURREAL_NS", "SURREAL_DB"]
-LABELS = {"app": "just-standup", "role": "server"}
+# Which server this deploy targets. Everyone's key is in the same Daytona org, so without an instance name all
+# deploys would find (and overwrite) the same server. Sandboxes without the label belong to "shared".
+INSTANCE = os.environ.get("STANDUP_INSTANCE", "shared")
+LABELS = {"app": "just-standup", "role": "server", "instance": INSTANCE}
+
+
+def ours(sandbox, role=None):
+    labels = sandbox.labels or {}
+    return (labels.get("app") == "just-standup" and labels.get("instance", "shared") == INSTANCE
+            and (role is None or labels.get("role") == role))
 
 
 def planner_snapshot(daytona):
@@ -53,7 +66,7 @@ def planner_snapshot(daytona):
         pass
     print(f"building planner snapshot {name} (image build + snapshot, ~2 min) ...")
     builder = daytona.create(CreateSandboxFromImageParams(image=planner_image(),
-                                                          labels={"app": "just-standup", "role": "builder"}), timeout=0)
+                                                          labels={"app": "just-standup", "role": "builder", "instance": INSTANCE}), timeout=0)
     try:
         builder.stop(timeout=120)
         builder.create_snapshot(name)
@@ -63,8 +76,7 @@ def planner_snapshot(daytona):
 
 
 def find_server(daytona):
-    return next((s for s in daytona.list() if (s.labels or {}).get("role") == "server"
-                 and (s.labels or {}).get("app") == "just-standup"), None)
+    return next((s for s in daytona.list() if ours(s, "server")), None)
 
 
 def sh(sandbox, cmd, timeout=600):
@@ -85,15 +97,16 @@ def up(recreate=False):
     if server is None:
         server = daytona.create(CreateSandboxFromSnapshotParams(
             snapshot="daytona-medium", public=True, auto_stop_interval=0, labels=LABELS), timeout=180)
-        print(f"created server sandbox {server.id}")
+        print(f"created server sandbox {server.id} (instance {INSTANCE})")
     else:
         if str(server.state).lower().endswith(("stopped", "archived")):
             server.start(timeout=180)
-        print(f"updating server sandbox {server.id}")
+        print(f"updating server sandbox {server.id} (instance {INSTANCE})")
     url = server.get_preview_link(8080).url
 
     env = {k: os.environ[k] for k in ENV_KEYS if os.environ.get(k)}
     env["PLANNER_SNAPSHOT"] = snapshot
+    env["STANDUP_INSTANCE"] = INSTANCE
     dotenv = "".join(f"{k}={shlex.quote(v)}\n" for k, v in env.items())
     config = f'{{"server_sandbox_id": "{server.id}", "public_url": "{url}"}}'
     server.fs.upload_files([FileUpload(source=str(ROOT / f), destination=f"app/{f}") for f in APP_FILES]
@@ -147,7 +160,7 @@ def up(recreate=False):
 def down():
     daytona = Daytona()
     for s in daytona.list():
-        if (s.labels or {}).get("app") == "just-standup":
+        if ours(s):
             print(f"deleting {s.id} ({(s.labels or {}).get('role')})")
             s.delete()
 

@@ -8,6 +8,7 @@ One trace per scene video: plan_video (VLM calls, safety guardrails) and, from t
 generation jobs, joined through the trace context stored in plan.json. All traces of one run share session.id.
 """
 import base64
+import contextvars
 import io
 import json
 import os
@@ -19,9 +20,20 @@ try:
 except ImportError:  # envs without OpenTelemetry (e.g. a backend env importing reasoner): tracing is off
     trace = None
 
-PROJECT = os.environ.get("ARIZE_PROJECT_NAME", "just-standup")
 SESSION_ENV = "STANDUP_SESSION_ID"
 _tracer = None
+# Per-thread session id (the web server traces several uploads at once); falls back to STANDUP_SESSION_ID.
+_session = contextvars.ContextVar("standup_session", default=None)
+
+
+def project():
+    """Read at call time: the web server loads ARIZE_PROJECT_NAME from .env after this module is imported."""
+    return os.environ.get("ARIZE_PROJECT_NAME", "just-standup")
+
+
+def set_session(session_id):
+    """Session id for the spans of the current thread (a new thread starts with none)."""
+    _session.set(session_id)
 
 
 def setup():
@@ -33,7 +45,7 @@ def setup():
                 _register_http()
             else:
                 from arize.otel import register
-                register(project_name=PROJECT, verbose=False,
+                register(project_name=project(), verbose=False,
                          log_to_console=os.environ.get("STANDUP_TRACE_CONSOLE") == "1")
         _tracer = trace.get_tracer("standup_agent")
     return _tracer
@@ -46,7 +58,7 @@ def _register_http():
     from opentelemetry.sdk.resources import Resource
     from opentelemetry.sdk.trace import TracerProvider
     from opentelemetry.sdk.trace.export import BatchSpanProcessor
-    provider = TracerProvider(resource=Resource.create({"openinference.project.name": PROJECT}))
+    provider = TracerProvider(resource=Resource.create({"openinference.project.name": project()}))
     provider.add_span_processor(BatchSpanProcessor(OTLPSpanExporter(
         endpoint="https://otlp.arize.com/v1/traces",
         headers={"arize-space-id": os.environ["ARIZE_SPACE_ID"], "authorization": os.environ["ARIZE_API_KEY"]})))
@@ -97,7 +109,7 @@ def span(name, kind="CHAIN", input=None, parent=None, metadata=None, **attrs):
     if tracer is None:
         yield _NoSpan()
         return
-    a = {"openinference.span.kind": kind, "session.id": os.environ.get(SESSION_ENV)}
+    a = {"openinference.span.kind": kind, "session.id": _session.get() or os.environ.get(SESSION_ENV)}
     if input is not None:
         a["input.value"], a["input.mime_type"] = _value(input)
     if metadata:

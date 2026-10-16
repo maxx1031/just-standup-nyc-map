@@ -3,6 +3,8 @@
 uvicorn webapp.server:app --host 0.0.0.0 --port 8080        (from the repo root; SurrealDB must be running)
 
 POST /api/uploads            phone video -> upload id (planning runs in the background)
+GET  /api/samples            the prepared scene videos (samples/scenes/scenes.json); POST /api/uploads/sample
+                             {"sample": id} plans one of them instead of an upload
 GET  /api/uploads/{id}       status, then the 3 recommendations read back from SurrealDB
 /internal/jobs/{id}/...      what the per-upload planner sandbox fetches / posts (per-job token)
 
@@ -27,6 +29,7 @@ from pathlib import Path
 
 from fastapi import FastAPI, File, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse, HTMLResponse, Response
+from pydantic import BaseModel
 
 from standup_agent import tracing as T
 from webapp import db
@@ -34,6 +37,7 @@ from webapp import db
 ROOT = Path(__file__).resolve().parents[1]
 DATA = Path(os.environ.get("STANDUP_DATA", ROOT / "data_web"))
 CONFIG = ROOT / "config.json"  # written by deploy: server sandbox id + public URL
+SAMPLES = ROOT / "samples" / "scenes"  # prepared scene videos a user can pick instead of filming
 BUNDLE_FILES = ["standup_agent/__init__.py", "standup_agent/reasoner.py", "standup_agent/run.py",
                 "standup_agent/tracing.py", "standup_agent/worker.py", "standup_agent/catalog.json"]
 JOB_TIMEOUT = 12 * 60
@@ -60,8 +64,9 @@ def settings():
 @app.on_event("startup")
 def startup():
     DATA.mkdir(parents=True, exist_ok=True)
-    # SurrealDB settings may come from app/.env (deploy writes them there); db.connect() reads os.environ.
-    os.environ.update({k: v for k, v in settings().items() if k.startswith("SURREAL_")})
+    # SurrealDB and Arize settings may come from app/.env (deploy writes them there); db.connect() and the tracer
+    # read os.environ. Without the Arize keys here the server's spans are no-ops and the planner's trace has no parent.
+    os.environ.update({k: v for k, v in settings().items() if k.startswith(("SURREAL_", "ARIZE_", "STANDUP_TRACE_"))})
     for attempt in range(20):  # SurrealDB may still be starting
         try:
             db.seed()
@@ -101,16 +106,54 @@ def qr_png(request: Request):
 
 @app.post("/api/uploads")
 async def create_upload(video: UploadFile = File(...)):
+    def write(raw):
+        with raw.open("wb") as f:
+            shutil.copyfileobj(video.file, f)
+    return start_upload(Path(video.filename or "").suffix.lower() or ".mp4", write, video.filename or "")
+
+
+class SampleUpload(BaseModel):
+    sample: str
+
+
+@app.post("/api/uploads/sample")
+def create_sample_upload(body: SampleUpload):
+    sample = next((s for s in samples() if s["id"] == body.sample), None)
+    if not sample:
+        raise HTTPException(404, "unknown sample")
+    return start_upload(".mp4", lambda raw: shutil.copy(SAMPLES / f"{sample['id']}.mp4", raw), f"sample:{sample['id']}")
+
+
+def start_upload(suffix, write, video_name):
+    """Store the video as <upload>/raw<suffix>, create the upload record and plan it in the background."""
     upload_id = uuid.uuid4().hex[:10]
     d = DATA / upload_id
     d.mkdir(parents=True)
-    raw = d / ("raw" + (Path(video.filename or "").suffix.lower() or ".mp4"))
-    with raw.open("wb") as f:
-        shutil.copyfileobj(video.file, f)
-    db.create_upload(upload_id, raw.name)
+    raw = d / ("raw" + suffix)
+    write(raw)
+    db.create_upload(upload_id, video_name or raw.name)
     JOBS[upload_id] = {"token": pysecrets.token_urlsafe(24), "event": threading.Event(), "dir": d}
     threading.Thread(target=run_job, args=(upload_id,), daemon=True).start()
     return {"id": upload_id}
+
+
+def samples():
+    f = SAMPLES / "scenes.json"
+    return json.loads(f.read_text()) if f.exists() else []
+
+
+@app.get("/api/samples")
+def list_samples():
+    return [{"id": s["id"], "title": s["title"], "video": f"/samples/{s['id']}.mp4", "poster": f"/samples/{s['id']}.jpg"}
+            for s in samples()]
+
+
+@app.get("/samples/{name}")
+def sample_file(name: str):
+    stem, _, ext = name.rpartition(".")
+    if ext not in ("mp4", "jpg") or stem not in {s["id"] for s in samples()}:
+        raise HTTPException(404)
+    return FileResponse(SAMPLES / name, media_type="video/mp4" if ext == "mp4" else "image/jpeg")
 
 
 @app.get("/api/uploads/{upload_id}")
@@ -175,7 +218,7 @@ async def job_result(upload_id: str, request: Request):
 def run_job(upload_id):
     job, env = JOBS[upload_id], settings()
     d, t0, timings = job["dir"], time.time(), {}
-    os.environ[T.SESSION_ENV] = f"upload-{upload_id}"
+    T.set_session(f"upload-{upload_id}")  # per thread: uploads can overlap
     with T.span("handle_upload", "CHAIN", input={"upload_id": upload_id}) as root:
         try:
             db.set_status(upload_id, "running", "preparing video")
@@ -234,7 +277,7 @@ def planner_env(env, upload_id, token):
         w["BEDROCK_API_KEY"] = bedrock_token(env, region)
     if env.get("ARIZE_SPACE_ID") and env.get("ARIZE_API_KEY"):
         w.update(ARIZE_SPACE_ID=env["ARIZE_SPACE_ID"], ARIZE_API_KEY=env["ARIZE_API_KEY"],
-                 ARIZE_PROJECT_NAME=T.PROJECT, STANDUP_ARIZE_TRANSPORT="http")
+                 ARIZE_PROJECT_NAME=env.get("ARIZE_PROJECT_NAME", T.project()), STANDUP_ARIZE_TRANSPORT="http")
     return w
 
 
@@ -264,7 +307,8 @@ def start_daytona(env, worker_env, upload_id, span):
     sb = daytona.create(CreateSandboxFromSnapshotParams(
         snapshot=env["PLANNER_SNAPSHOT"], linked_sandbox=env["SERVER_SANDBOX_ID"],
         ephemeral=True, ttl_minutes=20, env_vars=worker_env,
-        labels={"app": "just-standup", "role": "planner", "upload": upload_id}), timeout=300)
+        labels={"app": "just-standup", "role": "planner", "upload": upload_id,
+                "instance": env.get("STANDUP_INSTANCE", "shared")}), timeout=300)
     span.set_attribute("daytona.sandbox_id", sb.id)
     db.set_status(upload_id, "running", "starting a private sandbox", sandbox_id=sb.id)
     return lambda: daytona.delete(sb)
