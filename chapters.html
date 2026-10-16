@@ -1,0 +1,321 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+<title>No Excuse</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Anton&family=Bungee&family=JetBrains+Mono:wght@500;700&family=Permanent+Marker&family=Rubik+Wet+Paint&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet">
+<style>
+/* Chapter cards between the modules, in the style of 01_Pitch/demo2-runner.html:
+   excuses fly past → a fist smashes the screen → the answer is revealed with music.
+   One card per module, each in its module colour: 1 NO EQUIPMENT (pink, punchy track),
+   2 NO PLACE (green, calm track), 3 NO COACH (blue). The question always sits dead centre.
+   The flying one-liners only run on the opening card; later cards keep just the taped strips.
+   ?card=end is the finale: NO EQUIPMENT, / NO SPACE, NO COACH, / NO PROBLEM. / JUST STANDUP, stamped in line by line.
+   Phone-shaped on a laptop, full screen on a phone. Tap / Space = smash, then next. */
+:root{
+  --bg:#0B0F0E; --fg:#EDF3EF; --mute:#8FA39A; --lime:#C6FF3D; --pink:#FF4FA3; --cyan:#5EE6D0; --violet:#8A5CFF; --yellow:#FFE45E;
+  --ink:#0b0614; --brown:#4a2c17; --gold:#d9b46a;
+  --display:"Anton",Impact,sans-serif; --drip:"Rubik Wet Paint","Anton",sans-serif; --street:"Bungee","Anton",sans-serif;
+  --marker:"Permanent Marker","Space Grotesk",sans-serif; --mono:"JetBrains Mono",ui-monospace,monospace;
+  --blue:#3D8BFF;
+  --accent:var(--pink); --accent-deep:#7a1f52;   /* set per card in build() */
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--fg);font-family:"Space Grotesk",system-ui,sans-serif;overflow:hidden}
+body{display:grid;place-items:center}
+button{font:inherit;color:inherit;border:0;background:none;cursor:pointer}
+button:focus-visible{outline:2px solid var(--lime);outline-offset:3px}
+
+.stage{position:relative;height:min(94dvh,calc(100vw*16/9));aspect-ratio:9/16;border-radius:28px;overflow:hidden;background:radial-gradient(circle at 50% 50%,color-mix(in srgb,var(--accent) 16%,#0a0807),#0a0807 70%);container-type:size;isolation:isolate;
+  user-select:none;-webkit-user-select:none;-webkit-tap-highlight-color:transparent;cursor:pointer;box-shadow:0 0 0 1px rgba(237,243,239,.09),0 30px 80px rgba(0,0,0,.6)}
+@media (max-width:560px){.stage{width:100vw;height:100dvh;aspect-ratio:auto;border-radius:0}}
+
+/* excuses: taped strips + flying one-liners */
+.junk{position:absolute;inset:0}
+.strip{position:absolute;left:-40%;width:180%;height:11cqw;background:var(--brown);border-block:.6cqw solid var(--gold);transform:rotate(var(--r));display:flex;align-items:center;overflow:hidden;transition:transform 1.1s cubic-bezier(.3,0,.6,1),opacity 1.1s}
+.strip .run{white-space:nowrap;font:5.2cqw/1 var(--street);color:var(--gold);letter-spacing:.06em;animation:run var(--d) linear infinite}
+@keyframes run{from{transform:translateX(0)}to{transform:translateX(-50%)}}
+.dm{position:absolute;white-space:nowrap;font-size:5cqw;font-weight:700;color:#fff;text-shadow:0 2px 0 #000,0 0 12px rgba(0,0,0,.8);animation:fly var(--d) linear infinite;animation-delay:var(--dl);transition:transform 1.1s cubic-bezier(.3,0,.6,1),opacity 1.1s}
+@keyframes fly{from{left:100%}to{left:-90%}}
+.fall{transform:translate(var(--fx),120cqh) rotate(var(--fr))!important;opacity:0!important}
+
+/* the fist */
+.fist{position:absolute;left:50%;top:50%;font-size:46cqw;line-height:1;transform:translate(-50%,-50%) scale(.1);opacity:0;z-index:5;filter:drop-shadow(0 20px 40px rgba(0,0,0,.6));pointer-events:none}
+.fist.go{animation:punch .38s cubic-bezier(.6,0,.9,.4) forwards}
+@keyframes punch{0%{transform:translate(-50%,-50%) scale(.1);opacity:1}100%{transform:translate(-50%,-50%) scale(2.6);opacity:1}}
+.shake{animation:shake .4s}
+@keyframes shake{20%{transform:translate(-14px,8px)}40%{transform:translate(12px,-10px)}60%{transform:translate(-8px,6px)}80%{transform:translate(6px,-4px)}}
+canvas{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:7}
+
+/* top: brand + which chapter */
+.top{position:absolute;left:5cqw;right:5cqw;top:max(5cqw,env(safe-area-inset-top));display:flex;justify-content:space-between;align-items:center;z-index:8;pointer-events:none}
+.chip{font:4.6cqw/1 var(--street);color:var(--accent);transform:skewX(-14deg) rotate(-3deg);text-shadow:.6cqw .6cqw 0 var(--ink);transition:color .4s}   /* text only, in the module colour */
+.mods{display:flex;gap:2cqw;padding:1.6cqw 2.4cqw;border-radius:99px;background:rgba(11,6,20,.7)}
+.mods i{width:3.6cqw;height:3.6cqw;border-radius:50%;border:.6cqw solid var(--c);opacity:.45;transition:all .3s}
+.mods i.on{background:var(--c);opacity:1;transform:scale(1.25);box-shadow:0 0 3cqw var(--c)}
+
+/* before the smash */
+.hint{position:absolute;left:0;right:0;top:calc(50% + 11cqw);display:flex;justify-content:center;z-index:8;pointer-events:none;transition:opacity .3s}
+.hint .tap{font:700 3.2cqw var(--mono);letter-spacing:.16em;color:var(--yellow);animation:blink 1.2s ease-in-out infinite}
+@keyframes blink{50%{opacity:.35}}
+
+/* the question: dead centre before and after the smash */
+.q{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%) skewX(-10deg) rotate(-3deg);z-index:8;pointer-events:none;white-space:nowrap;
+  font:400 13cqw/1 var(--drip);color:var(--accent);-webkit-text-stroke:.5cqw var(--ink);text-shadow:1.2cqw 1.2cqw 0 var(--ink);transition:color .4s,opacity .4s}
+.q::after{content:"";position:absolute;left:-3%;right:-3%;top:50%;height:1.6cqw;background:var(--fg);transform:rotate(-5deg) scaleX(0);transform-origin:left;transition:transform .45s .35s cubic-bezier(.5,0,.3,1)}
+.q.struck{color:var(--mute);opacity:.85}
+.q.struck::after{transform:rotate(-5deg) scaleX(1)}
+/* after the smash: the answer under the question */
+.reveal{position:absolute;left:0;right:0;top:calc(50% + 10cqw);display:flex;flex-direction:column;align-items:center;gap:3cqw;padding:0 6cqw;text-align:center;opacity:0;transition:opacity .5s;z-index:6;pointer-events:none}
+.reveal.in{opacity:1}
+.reveal h1{margin:0;white-space:nowrap;font:400 15cqw/.92 var(--drip);color:var(--accent);-webkit-text-stroke:.6cqw var(--ink);text-shadow:1.4cqw 1.4cqw 0 var(--accent-deep);transform:skewX(-10deg) rotate(-3deg)}
+.reveal p{margin:0;font:5.2cqw/1.25 var(--marker);color:var(--fg);text-shadow:0 .4cqw 2cqw #000}
+.go-btn{position:absolute;left:5cqw;right:5cqw;bottom:max(6cqw,env(safe-area-inset-bottom));height:14cqw;border-radius:4cqw;background:var(--accent);color:var(--ink);font:4.8cqw/1 var(--street);transform:skewX(-10deg);box-shadow:0 1.2cqw 0 var(--accent-deep);z-index:9;opacity:0;pointer-events:none}
+.go-btn.in{opacity:1;pointer-events:auto;transition:opacity .4s .5s}   /* fade in only; gone at once on the next card */
+.go-btn:active{transform:skewX(-10deg) translateY(1cqw);box-shadow:none}
+
+/* finale */
+.end{position:absolute;inset:0;z-index:20;display:flex;flex-direction:column;justify-content:center;align-items:center;gap:3.5cqw;padding:0 6cqw;text-align:center;
+  background:radial-gradient(circle at 18% 22%,rgba(255,79,163,.22),transparent 45%),radial-gradient(circle at 85% 50%,rgba(198,255,61,.16),transparent 45%),radial-gradient(circle at 30% 85%,rgba(61,139,255,.22),transparent 45%),#0a0807}
+.end .l{white-space:nowrap;font:400 12cqw/1 var(--drip);-webkit-text-stroke:.5cqw var(--ink);text-shadow:1.2cqw 1.2cqw 0 var(--ink);transform:skewX(-10deg) rotate(-3deg);opacity:0}
+.end .l.in{animation:stamp .42s cubic-bezier(.2,.9,.3,1.2) forwards}
+@keyframes stamp{0%{opacity:0;transform:skewX(-10deg) rotate(-3deg) scale(2.4)}65%{opacity:1;transform:skewX(-10deg) rotate(-3deg) scale(.93)}100%{opacity:1;transform:skewX(-10deg) rotate(-3deg) scale(1)}}
+.end .pink{color:var(--pink)} .end .green{color:var(--lime)} .end .blue{color:var(--blue)} .end .white{color:var(--fg)}
+.end .brand{margin-top:4cqw;color:var(--lime);-webkit-text-stroke:.7cqw var(--ink);text-shadow:1.6cqw 1.6cqw 0 var(--pink)}
+.end .snd{position:absolute;bottom:max(6cqw,env(safe-area-inset-bottom));left:0;right:0;font:700 3cqw var(--mono);letter-spacing:.16em;color:var(--mute);opacity:0;transition:opacity .4s}
+.end .snd.on{opacity:1;animation:blink 1.2s ease-in-out infinite}
+@media (prefers-reduced-motion:reduce){*{animation-duration:.01s!important;transition:none!important}}
+</style>
+</head>
+<body>
+<main class="stage" id="stage" aria-label="Tap to smash">
+  <div class="junk" id="junk"></div>
+  <div class="fist" id="fist" aria-hidden="true">👊</div>
+  <canvas id="cracks"></canvas>
+  <div class="top"><div class="chip">JUST STANDUP</div>
+    <div class="mods" id="mods" aria-label="Module"><i style="--c:var(--pink)"></i><i style="--c:var(--lime)"></i><i style="--c:var(--blue)"></i></div></div>
+  <div class="q" id="q"></div>
+  <div class="hint" id="hint"><div class="tap">TAP TO SMASH 👊</div></div>
+  <section class="reveal" id="reveal" aria-live="polite">
+    <h1>NO PROBLEM.</h1>
+    <p id="sub"></p>
+  </section>
+  <button class="go-btn" id="goBtn" type="button"></button>
+  <section class="end" id="end" hidden aria-live="polite">
+    <div class="l pink">NO EQUIPMENT,</div>
+    <div class="l"><span class="green">NO SPACE,</span> <span class="blue">NO COACH,</span></div>
+    <div class="l white">NO PROBLEM.</div>
+    <div class="l brand">JUST STANDUP</div>
+    <div class="snd" id="snd">TAP FOR SOUND 🔊</div>
+  </section>
+</main>
+<audio id="punchy" src="music/punchy-groove-reveal.mp3" preload="auto"></audio>
+
+<script>
+(() => {
+const $ = s => document.querySelector(s);
+const CARDS = [
+  { q: 'NO EQUIPMENT?', sub: 'Your phone is all the gear you need.', next: 'START WARM-UP →', music: 'punchy', accent: 'var(--pink)', deep: '#7a1f52',
+    strips: ['NO EQUIPMENT ✕ NO DUMBBELLS ✕ ', 'NO MAT ✕ NO GYM PASS ✕ ', 'NO GEAR ✕ MAYBE TOMORROW ✕ '],
+    excuses: ['I don’t have dumbbells', 'No yoga mat', 'Gym is $90 a month', 'My bands broke', 'No pull-up bar', 'Need new sneakers', 'No treadmill at home', 'Can’t afford a trainer'] },
+  { q: 'NO PLACE?', sub: 'The whole city is your gym.', next: 'EXPLORE NYC →', music: 'calm', accent: 'var(--lime)', deep: '#4d6b12',
+    strips: ['NO PLACE ✕ NO GYM NEAR ME ✕ ', 'TOO SMALL ✕ TOO FAR ✕ ', 'NO SPACE ✕ MAYBE TOMORROW ✕ '] },
+  { q: 'NO COACH?', sub: 'Your phone coaches every rep.', next: 'MEET YOUR COACH →', music: 'punchy', accent: 'var(--blue)', deep: '#1b3c7a',
+    strips: ['NO COACH ✕ NO TRAINER ✕ ', 'NO PLAN ✕ NO FEEDBACK ✕ ', 'NO ONE TO ASK ✕ MAYBE TOMORROW ✕ '] }
+];
+let card = 0, smashed = false;
+// ?card=N: show just that card (inside journey.html); its button then tells the journey to move on
+const ONLY = new URLSearchParams(location.search).get('card');
+
+/* ---------- build a card ---------- */
+function build(i) {
+  card = i; smashed = false;
+  const c = CARDS[i], j = $('#junk');
+  const root = document.documentElement.style; root.setProperty('--accent', c.accent); root.setProperty('--accent-deep', c.deep);
+  [...$('#mods').children].forEach((d, k) => d.classList.toggle('on', k === i));
+  $('#hint').style.opacity = 1;
+  $('#q').textContent = c.q; $('#q').classList.remove('struck'); $('#sub').textContent = c.sub; $('#goBtn').textContent = c.next;
+  fit($('#q'), 13); fit($('#reveal h1'), 15);
+  $('#reveal').classList.remove('in'); $('#goBtn').classList.remove('in');
+  const f = $('#fist'); f.classList.remove('go'); f.style.opacity = '';
+  j.innerHTML = '';
+  [[-14, '14%', 22], [9, '42%', 30], [-6, '70%', 26]].forEach(([r, top, d], k) => {
+    const s = document.createElement('div'); s.className = 'strip';
+    s.style.setProperty('--r', r + 'deg'); s.style.top = top; s.dataset.r = r;
+    const txt = c.strips[k].repeat(6);
+    s.innerHTML = `<div class="run" style="--d:${d}s">${txt}${txt}</div>`;
+    j.appendChild(s);
+  });
+  (c.excuses || []).forEach((t, k) => {
+    const d = document.createElement('div'); d.className = 'dm'; d.textContent = t;
+    d.style.top = (8 + (k * 9.7) % 80) + '%';
+    d.style.setProperty('--d', (6 + (k % 4) * 1.4) + 's'); d.style.setProperty('--dl', (-k * 1.3) + 's');
+    j.appendChild(d);
+  });
+}
+
+// shrink a one-line headline until it fits 88% of the phone width
+function fit(el, max) {
+  const W = $('#stage').clientWidth * 0.88, cq = $('#stage').clientWidth / 100;
+  let size = max; el.style.fontSize = size + 'cqw';
+  while (el.scrollWidth > W && size > 6) { size -= 0.5; el.style.fontSize = size + 'cqw'; }
+}
+addEventListener('resize', () => { fit($('#q'), 13); fit($('#reveal h1'), 15); });
+
+/* ---------- the smash ---------- */
+function smash() {
+  if (smashed) return;
+  smashed = true;
+  audio();
+  const f = $('#fist'); f.classList.remove('go'); void f.offsetWidth; f.classList.add('go');
+  $('#hint').style.opacity = 0;
+  setTimeout(() => {
+    impact();
+    navigator.vibrate && navigator.vibrate([40, 30, 80]);
+    $('#stage').classList.add('shake'); setTimeout(() => $('#stage').classList.remove('shake'), 450);
+    cracks();
+    document.querySelectorAll('#junk > *').forEach(el => {
+      el.style.animationPlayState = 'paused';
+      el.style.setProperty('--fx', (Math.random() * 60 - 30) + 'cqw'); el.style.setProperty('--fr', (Math.random() * 120 - 60) + 'deg');
+      if (el.classList.contains('strip')) el.style.transform = `rotate(${el.dataset.r}deg)`;
+      requestAnimationFrame(() => el.classList.add('fall'));
+    });
+    setTimeout(() => { f.style.opacity = '0'; f.classList.remove('go'); }, 250);
+    setTimeout(() => { $('#q').classList.add('struck'); $('#reveal').classList.add('in'); $('#goBtn').classList.add('in'); }, 700);
+    setTimeout(() => startMusic(CARDS[card].music), 300);
+  }, 380);
+}
+function next() {
+  if (ONLY != null) { parent !== window ? parent.postMessage({ type: 'chapter-next', card }, location.origin) : build(card); return; }
+  if (card + 1 < CARDS.length) build(card + 1);
+  else { stopMusic(); build(0); }   // standalone: loop back to the first card
+}
+function cracks() {
+  const cv = $('#cracks'), r = cv.getBoundingClientRect(), dpr = devicePixelRatio || 1;
+  cv.width = r.width * dpr; cv.height = r.height * dpr;
+  const g = cv.getContext('2d'); g.scale(dpr, dpr);
+  g.strokeStyle = 'rgba(255,255,255,.85)'; g.lineWidth = 2.5;
+  for (let k = 0; k < 16; k++) {
+    let x = r.width / 2, y = r.height / 2, a = k / 16 * 6.283 + Math.random() * 0.3;
+    g.beginPath(); g.moveTo(x, y);
+    for (let s = 0; s < 6; s++) { a += (Math.random() - 0.5) * 0.6; const d = 20 + Math.random() * 60; x += Math.cos(a) * d; y += Math.sin(a) * d; g.lineTo(x, y); }
+    g.stroke();
+  }
+  setTimeout(() => g.clearRect(0, 0, r.width, r.height), 900);
+}
+
+/* ---------- sound: impact (same recipe as demo2-runner) ---------- */
+let ac = null, master = null;
+function audio() {
+  try {
+    ac = ac || new (window.AudioContext || window.webkitAudioContext)(); ac.resume();
+    if (!master) { master = ac.createGain(); master.gain.value = 1; master.connect(ac.destination); }
+  } catch (e) {}
+  try { if (navigator.audioSession) navigator.audioSession.type = 'playback'; } catch (e) {}
+  return ac;
+}
+function noiseHit(t, dur, freq, gain) {
+  const a = audio(); if (!a) return;
+  const buf = a.createBuffer(1, a.sampleRate * dur, a.sampleRate), d = buf.getChannelData(0);
+  for (let k = 0; k < d.length; k++) d[k] = (Math.random() * 2 - 1) * Math.pow(1 - k / d.length, 2.4);
+  const s = a.createBufferSource(); s.buffer = buf;
+  const f = a.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = freq;
+  const g = a.createGain(); g.gain.value = gain;
+  s.connect(f).connect(g).connect(master); s.start(a.currentTime + t);
+  const o = a.createOscillator(), og = a.createGain(), t0 = a.currentTime + t;
+  o.frequency.setValueAtTime(160, t0); o.frequency.exponentialRampToValueAtTime(45, t0 + 0.2);
+  og.gain.setValueAtTime(gain, t0); og.gain.exponentialRampToValueAtTime(0.001, t0 + 0.22);
+  o.connect(og).connect(master); o.start(t0); o.stop(t0 + 0.25);
+}
+function impact() { noiseHit(0, 0.6, 3000, 1); noiseHit(0.05, 0.4, 900, 0.8); }
+
+/* ---------- music: card 1 = the punchy track (file), card 2 = a calm lo-fi loop made here ---------- */
+const punchy = $('#punchy');
+let calm = null;
+function startMusic(kind) {
+  stopMusic();
+  if (kind === 'punchy') { punchy.currentTime = 0; punchy.volume = 0.9; punchy.play().catch(() => {}); }
+  else calm = Calm();
+}
+function stopMusic() {
+  if (!punchy.paused) { const v0 = punchy.volume; let k = 0; const id = setInterval(() => { k++; punchy.volume = Math.max(0, v0 * (1 - k / 12)); if (k >= 12) { clearInterval(id); punchy.pause(); } }, 60); }
+  if (calm) { calm.stop(); calm = null; }
+}
+// 70 BPM, soft pads (Fmaj7 → Em7 → Dm9 → Cmaj7, two bars each), round kick, gentle hat, a slow pluck line
+function Calm() {
+  const a = audio(), BEAT = 60 / 70, out = a.createGain(), lp = a.createBiquadFilter();
+  lp.type = 'lowpass'; lp.frequency.value = 1600; out.gain.setValueAtTime(0.0001, a.currentTime); out.gain.exponentialRampToValueAtTime(0.55, a.currentTime + 2.5);
+  lp.connect(out).connect(master);
+  const hz = m => 440 * Math.pow(2, (m - 69) / 12);
+  const CH = [[53, 57, 60, 64], [52, 55, 59, 62], [50, 53, 57, 64], [48, 52, 55, 59]];
+  const note = (t, f, dur, vol, type = 'triangle', att = 0.6) => {
+    const o = a.createOscillator(), g = a.createGain(); o.type = type; o.frequency.value = f; o.detune.value = (Math.random() - 0.5) * 8;
+    g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(vol, t + att); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    o.connect(g).connect(lp); o.start(t); o.stop(t + dur + 0.05);
+  };
+  const kick = t => { const o = a.createOscillator(), g = a.createGain(); o.frequency.setValueAtTime(90, t); o.frequency.exponentialRampToValueAtTime(42, t + 0.25); g.gain.setValueAtTime(0.32, t); g.gain.exponentialRampToValueAtTime(0.001, t + 0.35); o.connect(g).connect(out); o.start(t); o.stop(t + 0.4); };
+  const hat = t => { const n = a.createBufferSource(), b = a.createBuffer(1, a.sampleRate * 0.05, a.sampleRate), d = b.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / d.length); n.buffer = b; const f = a.createBiquadFilter(); f.type = 'highpass'; f.frequency.value = 7000; const g = a.createGain(); g.gain.value = 0.05; n.connect(f).connect(g).connect(out); n.start(t); };
+  let beat = 0, nextT = a.currentTime + 0.1;
+  const id = setInterval(() => {
+    while (nextT < a.currentTime + 0.4) {
+      const bar = Math.floor(beat / 4), ch = CH[Math.floor(bar / 2) % CH.length], b = beat % 4;
+      if (beat % 8 === 0) ch.forEach(m => note(nextT, hz(m), BEAT * 8.4, 0.05));
+      if (b === 0 || b === 2) kick(nextT);
+      hat(nextT + BEAT / 2);
+      note(nextT, hz(ch[(beat * 3) % 4] + 12), BEAT * 1.6, 0.035, 'sine', 0.02);
+      beat++; nextT += BEAT;
+    }
+  }, 100);
+  return { stop() { clearInterval(id); const t = a.currentTime; out.gain.cancelScheduledValues(t); out.gain.setValueAtTime(out.gain.value, t); out.gain.exponentialRampToValueAtTime(0.0001, t + 0.8); setTimeout(() => out.disconnect(), 900); } };
+}
+
+/* ---------- input ---------- */
+$('#stage').addEventListener('click', e => { if (ONLY !== 'end' && !e.target.closest('#goBtn')) smash(); });
+$('#goBtn').addEventListener('click', e => { e.stopPropagation(); next(); });
+addEventListener('keydown', e => {
+  if (ONLY === 'end') return;
+  if ([' ', 'Enter', 'ArrowRight'].includes(e.key)) { e.preventDefault(); smashed ? next() : smash(); }
+  if (e.key === 'ArrowLeft' && ONLY == null) { e.preventDefault(); stopMusic(); build(Math.max(0, card - 1)); }
+});
+/* ---------- finale ---------- */
+function finale() {
+  $('#end').hidden = false;
+  const lines = [...document.querySelectorAll('#end .l')];
+  lines.forEach((l, i) => { fit(l, i === 3 ? 15 : 12); l.classList.remove('in'); });
+  let silent = false;
+  const play = () => {
+    stopMusic();
+    lines.forEach((l, i) => setTimeout(() => {
+      l.classList.remove('in'); void l.offsetWidth; l.classList.add('in');
+      i < 3 ? noiseHit(0, 0.35, 1200, 0.9) : impact();
+      if (i === 3) { $('#stage').classList.add('shake'); setTimeout(() => $('#stage').classList.remove('shake'), 450); fanfare(); setTimeout(() => startMusic('punchy'), 1200); }
+    }, 300 + i * 650));
+  };
+  // no tap has happened in this page yet, so the browser may keep it silent: then offer a tap that replays it with sound
+  audio(); silent = !ac || ac.state !== 'running';
+  $('#snd').classList.toggle('on', silent);
+  play();
+  $('#stage').addEventListener('click', () => { audio(); $('#snd').classList.remove('on'); lines.forEach(l => l.classList.remove('in')); play(); });
+}
+function fanfare() {   // the same victory brass as the warm-up (motion/core.js)
+  const a = audio(); if (!a) return;
+  [[523, 0, .11], [659, .12, .11], [784, .24, .11], [1047, .36, .6]].forEach(([f, d, l]) => [f, f / 2].forEach((hz, k) => {
+    const t = a.currentTime + d, g = a.createGain(), fl = a.createBiquadFilter(), v = k ? 0.12 : 0.25;
+    fl.type = 'lowpass'; fl.frequency.value = 2500;
+    g.gain.setValueAtTime(0.001, t); g.gain.exponentialRampToValueAtTime(v, t + 0.02); g.gain.setValueAtTime(v, t + l - 0.05); g.gain.exponentialRampToValueAtTime(0.001, t + l + 0.08);
+    [0, 6].forEach(det => { const o = a.createOscillator(); o.type = 'sawtooth'; o.frequency.value = hz; o.detune.value = det; o.connect(fl); o.start(t); o.stop(t + l + 0.1); });
+    fl.connect(g).connect(master);
+  }));
+}
+
+if (ONLY === 'end') { ['#junk', '#q', '#hint', '#reveal', '#goBtn', '.top'].forEach(q => $(q).hidden = true); document.documentElement.style.setProperty('--accent', 'var(--lime)'); finale(); }
+else build(ONLY != null ? Math.min(CARDS.length - 1, Math.max(0, +ONLY)) : 0);
+document.fonts && document.fonts.ready.then(() => { fit($('#q'), 13); fit($('#reveal h1'), 15); document.querySelectorAll('#end .l').forEach((l, i) => fit(l, i === 3 ? 15 : 12)); });   // re-fit once the drip font is in
+})();
+</script>
+</body>
+</html>

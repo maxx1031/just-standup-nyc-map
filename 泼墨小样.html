@@ -1,0 +1,348 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Ink Claim</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Anton&family=JetBrains+Mono:wght@500;700&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet">
+<style>
+  /* Tokens — same as index.html (Just Standup M1/M2) */
+  :root {
+    --page: #0B0F0E;
+    --card: #121917;
+    --line: #1A2321;
+    --text: #EDF3EF;
+    --soft: #8FA39A;
+    --teal: #5EE6D0;
+    --lime: #C6FF3D;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: var(--page); color: var(--text); font-family: 'Space Grotesk', system-ui, sans-serif; overflow: hidden; }
+  body { display: grid; place-items: center; }
+  button { font: inherit; color: inherit; cursor: pointer; border: 0; background: none; padding: 0; }
+  .mono { font-family: 'JetBrains Mono', ui-monospace, monospace; }
+
+  /* Phone-shaped stage; full screen on a real phone */
+  .stage { position: relative; height: min(94dvh, calc(100vw * 16 / 9)); aspect-ratio: 9 / 16; border-radius: 28px; overflow: hidden; background: #000; container-type: size; isolation: isolate; cursor: crosshair; user-select: none; -webkit-user-select: none; -webkit-tap-highlight-color: transparent; box-shadow: 0 0 0 1px var(--line), 0 30px 80px rgba(0,0,0,.6); }
+  @media (max-width: 560px) { .stage { width: 100vw; height: 100dvh; aspect-ratio: auto; border-radius: 0; } }
+
+  video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; pointer-events: none; }
+  .v-gray { filter: grayscale(1) brightness(.55) contrast(1.15); }
+  .v-color { visibility: hidden; z-index: 2; -webkit-mask-repeat: no-repeat; mask-repeat: no-repeat; }
+  svg.blob { position: absolute; overflow: visible; pointer-events: none; }
+  .ink { z-index: 1; fill: var(--lime); }
+  .wipe { z-index: 20; fill: var(--teal); }
+  .drop { position: absolute; z-index: 3; border-radius: 50%; background: var(--lime); pointer-events: none; }
+  .flash { position: absolute; inset: 0; z-index: 4; background: var(--lime); opacity: 0; pointer-events: none; mix-blend-mode: screen; }
+  .shade { position: absolute; inset: 0; z-index: 5; pointer-events: none; background: linear-gradient(180deg, rgba(0,0,0,.6), transparent 20%, transparent 55%, rgba(0,0,0,.8)); }
+
+  /* HUD */
+  .hud { position: absolute; inset: 0; z-index: 10; pointer-events: none; padding: 5cqw; display: flex; flex-direction: column; }
+  .hud button { pointer-events: auto; }
+  .top { display: flex; justify-content: space-between; align-items: flex-start; gap: 3cqw; }
+  .brand { font-family: 'Anton', sans-serif; font-size: 4.6cqw; line-height: 1; color: var(--page); background: var(--lime); padding: 1.4cqw 2.4cqw 1.2cqw; border-radius: 1.4cqw; transform: skewX(-8deg); box-shadow: 0 0 5cqw rgba(198,255,61,.35); }
+  .sect { margin-top: 2.6cqw; align-self: flex-start; font-family: 'Anton', sans-serif; font-size: 3.6cqw; letter-spacing: .04em; color: var(--page); background: var(--teal); padding: 1cqw 2.4cqw .8cqw; transform: skewX(-12deg) rotate(-2deg); }
+  a.sect { text-decoration: none; pointer-events: auto; }
+  .enter-ink { position: absolute; inset: 0; z-index: 30; background: var(--lime); pointer-events: none; }
+  .turf { text-align: right; }
+  .turf .k { font-size: 2.6cqw; letter-spacing: .12em; color: var(--soft); }
+  .segs { display: flex; gap: 1.2cqw; margin: 1.6cqw 0 1.4cqw; justify-content: flex-end; }
+  .seg { width: 9cqw; height: 2.2cqw; border-radius: 1cqw; background: rgba(255,255,255,.16); transform: skewX(-14deg); transition: background .25s, box-shadow .25s; }
+  .seg.on { background: var(--lime); box-shadow: 0 0 3cqw rgba(198,255,61,.6); }
+  .seg.locked { background: repeating-linear-gradient(-45deg, rgba(255,255,255,.12) 0 .8cqw, transparent .8cqw 1.6cqw); }
+  .seg.cur { outline: .5cqw solid var(--text); outline-offset: .6cqw; }
+  .turf .n { font-size: 3cqw; color: var(--soft); letter-spacing: .06em; }
+  .turf .n b { color: var(--lime); font-weight: 700; display: inline-block; }
+
+  .hint { position: absolute; left: 50%; top: 45%; transform: translate(-50%, -50%); display: grid; justify-items: center; gap: 4cqw; transition: opacity .2s; }
+  .ring { width: 22cqw; height: 22cqw; border-radius: 50%; border: .7cqw dashed rgba(237,243,239,.7); animation: spin 8s linear infinite, pulse 1.6s ease-in-out infinite; }
+  .hint .mono { font-size: 2.9cqw; letter-spacing: .14em; color: var(--text); text-shadow: 0 1px 8px #000; white-space: nowrap; }
+  @keyframes spin { to { rotate: 360deg; } }
+  @keyframes pulse { 50% { scale: 1.12; border-color: var(--lime); } }
+
+  .stamp { position: absolute; left: 50%; top: 42%; transform: translate(-50%, -50%) rotate(-8deg); font-family: 'Anton', sans-serif; font-size: 15cqw; line-height: 1; letter-spacing: .01em; color: var(--page); background: var(--lime); padding: 2cqw 5cqw 1.4cqw; box-shadow: 1.6cqw 1.6cqw 0 var(--page); opacity: 0; white-space: nowrap; }
+
+  .bottom { margin-top: auto; display: grid; gap: 3cqw; }
+  .nametag { justify-self: end; text-align: right; transform: skewX(-8deg); }
+  .nametag .no { display: inline-block; font-size: 2.8cqw; letter-spacing: .14em; color: var(--page); background: var(--teal); padding: .6cqw 1.6cqw; }
+  .nametag .nm { display: block; margin-top: 1cqw; font-family: 'Anton', sans-serif; font-size: 7.4cqw; line-height: 1.02; background: rgba(0,0,0,.72); padding: 1.4cqw 2.6cqw 1cqw; }
+  .meta { display: flex; justify-content: flex-end; align-items: center; gap: 2.4cqw; font-size: 3cqw; color: var(--soft); }
+  .pill { font-weight: 700; font-size: 2.8cqw; letter-spacing: .1em; padding: .8cqw 2.2cqw; border-radius: 99px; background: rgba(255,255,255,.12); color: var(--text); }
+  .pill.on { background: var(--lime); color: var(--page); }
+  .cta { height: 13cqw; border-radius: 4cqw; background: var(--lime); color: var(--page); font-size: 4.2cqw; font-weight: 700; letter-spacing: .04em; box-shadow: 0 0 7cqw rgba(198,255,61,.3); transition: transform .1s; }
+  .cta:active { transform: scale(.97); }
+  .cta.ghost { background: rgba(18,25,23,.85); color: var(--lime); box-shadow: inset 0 0 0 .4cqw var(--lime); }
+</style>
+</head>
+<body>
+<div class="stage" id="stage">
+  <video class="v-gray" muted playsinline loop autoplay preload="auto"></video>
+  <svg class="blob ink" viewBox="-2 -2 4 4"></svg>
+  <video class="v-color" muted playsinline loop preload="auto"></video>
+  <div class="flash"></div>
+  <div class="shade"></div>
+  <svg class="blob wipe" viewBox="-2 -2 4 4"></svg>
+  <div class="enter-ink" id="enterInk"></div>
+
+  <div class="hud">
+    <div class="top">
+      <div style="display:flex;flex-direction:column">
+        <div class="brand">JUST STANDUP</div>
+        <a class="sect" href="index.html" aria-label="Back to the New York map">← EXPLORE NYC</a>
+      </div>
+      <div class="turf">
+        <div class="k mono">DUMBO TURF</div>
+        <div class="segs" id="segs"></div>
+        <div class="n mono"><b id="cnt">0</b> / <span id="total">3</span> INKED</div>
+      </div>
+    </div>
+
+    <div class="hint" id="hint"><div class="ring"></div><div class="mono">UNCLAIMED · TAP TO INK</div></div>
+    <div class="stamp" id="stamp">CLAIMED!</div>
+
+    <div class="bottom">
+      <div class="nametag"><span class="no mono" id="no">SPOT 01</span><span class="nm" id="nm"></span></div>
+      <div class="meta"><span class="mono" id="move"></span><span class="pill mono" id="status">LOCKED</span></div>
+      <button class="cta" id="cta">CLAIM THIS SPOT</button>
+    </div>
+  </div>
+</div>
+
+<script src="motion/core.js"></script>
+<script>
+// The same 4 DUMBO spots as the map pins in index.html (ids match), opened with ?spot=01..04.
+// Moves are placeholders until the team picks them.
+const SPOTS = [
+  { id: '01', src: '00_video/01_布鲁克林桥下.mp4',  name: 'FULTON FERRY LANDING',     move: 'SQUAT PULSES · 45 S' },
+  { id: '02', src: '00_video/10_草坪看大桥.mp4',    name: 'EMPIRE FULTON FERRY LAWN', move: 'WALKING LUNGES · 45 S', open: true },
+  { id: '03', src: '00_video/12_铁门石子路.mp4',    name: 'WATER STREET',             move: 'HIGH KNEES · 45 S' },
+  { id: '04', src: '00_video/13_红砖院子_橙桌.mp4', name: "ST. ANN'S COURTYARD",      move: 'INCLINE PUSH-UPS · 45 S' },
+];
+
+const $ = s => document.querySelector(s);
+const stage = $('#stage'), gray = $('.v-gray'), color = $('.v-color');
+const ink = $('.ink'), wipe = $('.wipe'), flash = $('.flash'), stamp = $('#stamp'), cta = $('#cta');
+const claimed = SPOTS.map(() => false);
+// only spots marked open can be inked for now (same flag as the map); a locked ?spot falls back to the open one
+const OPEN = Math.max(0, SPOTS.findIndex(s => s.open));
+const asked = SPOTS.findIndex(s => s.id === new URLSearchParams(location.search).get('spot'));
+let cur = asked >= 0 && SPOTS[asked].open ? asked : OPEN, busy = false, seed = 11;
+$('#total').textContent = SPOTS.length;
+
+SPOTS.forEach((_, i) => {
+  const b = document.createElement('button');
+  b.className = 'seg';
+  b.ariaLabel = 'Spot ' + (i + 1);
+  b.onclick = e => { e.stopPropagation(); goTo(i); };
+  $('#segs').appendChild(b);
+});
+
+// ---------- splat shape ----------
+// Blob of radius ~1 (min 0.82) in a -2..2 viewBox, plus droplets out to ~1.7.
+function rng(a) { return () => { a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+function splat(s) {
+  const r = rng(s), N = 22, p = [];
+  for (let i = 0; i < N; i++) {
+    const a = i / N * Math.PI * 2 + (r() - .5) * .12;
+    let d = .82 + r() * .16;
+    if (r() < .3) d += .18 + r() * .25;           // tendril
+    p.push([Math.cos(a) * d, Math.sin(a) * d]);
+  }
+  const f = v => v.toFixed(3), mid = (a, b) => [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
+  let path = 'M' + mid(p[N - 1], p[0]).map(f).join(' ');
+  for (let i = 0; i < N; i++) path += 'Q' + p[i].map(f).join(' ') + ' ' + mid(p[i], p[(i + 1) % N]).map(f).join(' ');
+  let drops = '';
+  for (let i = 0; i < 10; i++) {
+    const a = r() * Math.PI * 2, d = 1.1 + r() * .6;
+    drops += `<circle cx="${f(Math.cos(a) * d)}" cy="${f(Math.sin(a) * d)}" r="${f(.03 + r() * .09)}"/>`;
+  }
+  return `<path d="${path}Z"/>${drops}`;
+}
+const maskUrl = body => `url("data:image/svg+xml,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="-2 -2 4 4">${body}</svg>`)}")`;
+
+// ---------- tiny animation helpers ----------
+const clamp01 = k => Math.max(0, Math.min(1, k));
+const easeOut = k => 1 - Math.pow(1 - k, 3);
+const tween = (ms, fn) => new Promise(done => {
+  const t0 = performance.now();
+  const step = t => { const k = clamp01((t - t0) / ms); fn(k); k < 1 ? requestAnimationFrame(step) : done(); };
+  requestAnimationFrame(step);
+});
+function place(el, x, y, s) { Object.assign(el.style, { left: x - s / 2 + 'px', top: y - s / 2 + 'px', width: s + 'px', height: s + 'px' }); }
+function maskAt(el, x, y, s) {
+  const st = el.style;
+  st.webkitMaskSize = st.maskSize = `${s}px ${s}px`;
+  st.webkitMaskPosition = st.maskPosition = `${x - s / 2}px ${y - s / 2}px`;
+}
+function setMask(el, v) { el.style.webkitMaskImage = el.style.maskImage = v; }
+// Blob size that fully covers the stage from (x, y): min radius 0.82 of a 4-unit box.
+function coverSize(x, y) {
+  const W = stage.clientWidth, H = stage.clientHeight;
+  const far = Math.max(Math.hypot(x, y), Math.hypot(W - x, y), Math.hypot(x, H - y), Math.hypot(W - x, H - y));
+  return far * 4 / .82 * 1.03;
+}
+
+// ---------- sound (no files) ----------
+let ac;
+function sfx(kind) {
+  try {
+    ac = ac || new (window.AudioContext || window.webkitAudioContext)();
+    const t = ac.currentTime;
+    if (kind === 'splat') {
+      const n = ac.sampleRate * .35 | 0, buf = ac.createBuffer(1, n, ac.sampleRate), d = buf.getChannelData(0);
+      for (let i = 0; i < n; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / n, 2);
+      const src = ac.createBufferSource(), lp = ac.createBiquadFilter(), g = ac.createGain();
+      src.buffer = buf; lp.type = 'lowpass';
+      lp.frequency.setValueAtTime(3200, t); lp.frequency.exponentialRampToValueAtTime(260, t + .3);
+      g.gain.setValueAtTime(.9, t); g.gain.exponentialRampToValueAtTime(.001, t + .35);
+      src.connect(lp).connect(g).connect(ac.destination); src.start(t);
+      const o = ac.createOscillator(), og = ac.createGain();
+      o.frequency.setValueAtTime(170, t); o.frequency.exponentialRampToValueAtTime(48, t + .18);
+      og.gain.setValueAtTime(.7, t); og.gain.exponentialRampToValueAtTime(.001, t + .2);
+      o.connect(og).connect(ac.destination); o.start(t); o.stop(t + .22);
+    } else {
+      [880, 1320].forEach((f, i) => {
+        const o = ac.createOscillator(), g = ac.createGain(), s = t + i * .09;
+        o.type = 'triangle'; o.frequency.value = f;
+        g.gain.setValueAtTime(0, s); g.gain.linearRampToValueAtTime(.35, s + .01); g.gain.exponentialRampToValueAtTime(.001, s + .25);
+        o.connect(g).connect(ac.destination); o.start(s); o.stop(s + .26);
+      });
+    }
+  } catch (e) {}
+}
+
+// ---------- claim: lime ink hits, colour floods in behind it ----------
+function spray(x, y) {
+  for (let i = 0; i < 10; i++) {
+    const d = document.createElement('div'), s = 8 + Math.random() * 22;
+    d.className = 'drop';
+    Object.assign(d.style, { width: s + 'px', height: s + 'px', left: x - s / 2 + 'px', top: y - s / 2 + 'px' });
+    stage.appendChild(d);
+    const a = Math.random() * Math.PI * 2, r = 90 + Math.random() * 220, dx = Math.cos(a) * r, dy = Math.sin(a) * r;
+    d.animate([
+      { transform: 'translate(0,0) scale(.4)' },
+      { transform: `translate(${dx}px,${dy}px) scale(1)`, offset: .3 },
+      { transform: `translate(${dx}px,${dy + 30}px) scale(1.1,1.5)`, opacity: 1, offset: .7 },
+      { transform: `translate(${dx}px,${dy + 44}px) scale(1.2,1.7)`, opacity: 0 },
+    ], { duration: 1300, easing: 'cubic-bezier(.2,.8,.3,1)' }).onfinish = () => d.remove();
+  }
+}
+
+async function claim(x, y) {
+  if (busy || claimed[cur]) return;
+  busy = true;
+  window.Motion && Motion.initAudio();   // unlock audio inside the tap, the fanfare plays ~1 s later
+  sfx('splat');
+  navigator.vibrate?.(40);
+  const E = coverSize(x, y);
+  ink.innerHTML = splat(seed++);
+  setMask(color, maskUrl(splat(seed++)));       // different shape → ragged lime rim
+  maskAt(color, x, y, 0);
+  color.currentTime = gray.currentTime;
+  color.play().catch(() => {});
+  color.style.visibility = 'visible';
+  $('#hint').style.opacity = 0;
+  flash.animate([{ opacity: .4 }, { opacity: 0 }], { duration: 260, easing: 'ease-out' });
+  stage.animate([
+    { transform: 'translate(0,0)' }, { transform: 'translate(-6px,4px)' }, { transform: 'translate(5px,-3px)' },
+    { transform: 'translate(-3px,2px)' }, { transform: 'translate(0,0)' },
+  ], { duration: 260 });
+  spray(x, y);
+  setTimeout(() => {
+    sfx('ding');
+    stamp.animate([
+      { transform: 'translate(-50%,-50%) rotate(-8deg) scale(2.4)', opacity: 0 },
+      { transform: 'translate(-50%,-50%) rotate(-8deg) scale(.92)', opacity: 1, offset: .65 },
+      { transform: 'translate(-50%,-50%) rotate(-8deg) scale(1)', opacity: 1 },
+    ], { duration: 380, easing: 'cubic-bezier(.2,.9,.3,1.2)', fill: 'forwards' });
+  }, 420);
+  await tween(950, k => {
+    place(ink, x, y, E * (.08 + .92 * easeOut(clamp01(k / .55))));
+    maskAt(color, x, y, E * (.04 + .96 * easeOut(clamp01((k - .1) / .75))));
+  });
+  setMask(color, 'none');
+  ink.innerHTML = '';
+  claimed[cur] = true;
+  hud(true);
+  // every open spot inked → the same victory fanfare as the warm-up (motion/core.js)
+  if (SPOTS.every((sp, i) => !sp.open || claimed[i]) && window.Motion) { Motion.initAudio(); Motion.play(Motion.SND.win); }
+  busy = false;
+}
+
+// ---------- switch spots: teal ink wipe ----------
+function load() {
+  gray.src = color.src = SPOTS[cur].src;
+  gray.play().catch(() => {});
+  if (claimed[cur]) { setMask(color, 'none'); color.style.visibility = 'visible'; color.play().catch(() => {}); }
+  else { color.style.visibility = 'hidden'; color.pause(); }
+  stamp.getAnimations().forEach(a => a.cancel());
+  stamp.style.opacity = claimed[cur] ? 1 : 0;
+  hud();
+}
+async function goTo(n) {
+  if (busy || n === cur) return;
+  if (!SPOTS[n].open) {   // locked: wiggle its segment instead of switching
+    $('#segs').children[n].animate([{ transform: 'skewX(-14deg) translateX(0)' }, { transform: 'skewX(-14deg) translateX(-4px)' }, { transform: 'skewX(-14deg) translateX(4px)' }, { transform: 'skewX(-14deg) translateX(0)' }], { duration: 240 });
+    return;
+  }
+  busy = true;
+  const x = stage.clientWidth * .9, y = stage.clientHeight * .55, E = coverSize(x, y);
+  wipe.innerHTML = splat(seed++);
+  wipe.style.opacity = 1;
+  await tween(300, k => place(wipe, x, y, E * easeOut(k)));
+  cur = n;
+  load();
+  await new Promise(r => { gray.addEventListener('loadeddata', r, { once: true }); setTimeout(r, 700); });
+  await tween(260, k => wipe.style.opacity = 1 - k);
+  wipe.innerHTML = '';
+  busy = false;
+}
+
+function hud(bump) {
+  const s = SPOTS[cur], n = claimed.filter(Boolean).length, all = n === SPOTS.length;
+  $('#no').textContent = 'SPOT ' + s.id;
+  $('#nm').textContent = s.name;
+  $('#move').textContent = s.move;
+  $('#status').textContent = claimed[cur] ? 'CLAIMED' : 'LOCKED';
+  $('#status').classList.toggle('on', claimed[cur]);
+  $('#hint').style.opacity = claimed[cur] ? 0 : 1;
+  [...$('#segs').children].forEach((b, i) => { b.classList.toggle('on', claimed[i]); b.classList.toggle('cur', i === cur); b.classList.toggle('locked', !SPOTS[i].open); });
+  $('#cnt').textContent = n;
+  if (bump) $('#cnt').animate([{ transform: 'scale(1.8)' }, { transform: 'scale(1)' }], { duration: 300, easing: 'ease-out' });
+  const openDone = SPOTS.every((sp, i) => !sp.open || claimed[i]);
+  cta.textContent = !claimed[cur] ? 'CLAIM THIS SPOT' : openDone ? '← BACK TO NYC' : 'NEXT SPOT →';
+  cta.classList.toggle('ghost', claimed[cur]);
+}
+
+function next() {
+  if (SPOTS.every((sp, i) => !sp.open || claimed[i])) { location.href = 'index.html'; return; }
+  if (claimed.every(Boolean)) { claimed.fill(false); cur = -1; return goTo(0); }
+  const i = claimed.findIndex((c, j) => !c && j > cur);
+  goTo(i >= 0 ? i : claimed.indexOf(false));
+}
+
+stage.addEventListener('click', e => {
+  if (e.target.closest('button')) return;
+  const r = stage.getBoundingClientRect();
+  claim(e.clientX - r.left, e.clientY - r.top);
+});
+cta.addEventListener('click', e => {
+  e.stopPropagation();
+  claimed[cur] ? next() : claim(stage.clientWidth / 2, stage.clientHeight * .45);
+});
+// Presenter keys: Space/Enter = main button, ←/→ = switch spot
+addEventListener('keydown', e => {
+  if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); cta.click(); }
+  if (e.key === 'ArrowRight') goTo((cur + 1) % SPOTS.length);
+  if (e.key === 'ArrowLeft') goTo((cur + SPOTS.length - 1) % SPOTS.length);
+});
+
+load();
+// arriving from the map: its lime ink is still covering the screen, so lift it once the video has a frame
+new Promise(r => { gray.addEventListener('loadeddata', r, { once: true }); setTimeout(r, 900); })
+  .then(() => $('#enterInk').animate([{ opacity: 1 }, { opacity: 0 }], { duration: 450, easing: 'ease-out', fill: 'forwards' }));
+</script>
+</body>
+</html>

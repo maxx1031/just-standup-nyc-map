@@ -39,7 +39,16 @@
   .row { display: flex; align-items: center; gap: 12px; }
   .row.between { justify-content: space-between; }
   .brand { font-family: 'Anton', sans-serif; font-size: 20px; line-height: 1; letter-spacing: .02em; color: var(--page); background: var(--lime); padding: 6px 10px 5px; border-radius: 6px; transform: skewX(-8deg); box-shadow: 0 0 20px rgba(198,255,61,.35); }
-  .tag-explore { font-size: 11px; color: var(--teal); }
+  .tag-explore { font-size: 11px; color: var(--teal); margin-right: 52px; }
+  .sound { position: fixed; top: var(--safe-t); right: 20px; z-index: 4; width: 40px; height: 40px; border-radius: 12px; border: 1px solid rgba(94,230,208,.35); background: rgba(18,25,23,.9); color: var(--teal); display: grid; place-items: center; }
+  .sound[aria-pressed="true"] { color: var(--lime); border-color: rgba(198,255,61,.5); box-shadow: 0 0 14px rgba(198,255,61,.25); }
+  .sound .eq { display: flex; gap: 2px; align-items: flex-end; height: 14px; }
+  .sound .eq i { width: 3px; background: currentColor; border-radius: 1px; height: 4px; }
+  .sound[aria-pressed="true"].playing .eq i { animation: eq .9s ease-in-out infinite; }
+  .sound .eq i:nth-child(2) { animation-delay: .2s !important; } .sound .eq i:nth-child(3) { animation-delay: .4s !important; } .sound .eq i:nth-child(4) { animation-delay: .1s !important; }
+  @keyframes eq { 0%, 100% { height: 4px; } 50% { height: 14px; } }
+  .sound .x { display: none; }
+  .sound[aria-pressed="false"] .eq { display: none; } .sound[aria-pressed="false"] .x { display: block; }
   .back { width: 44px; height: 44px; flex: none; border-radius: 14px; border: 1px solid rgba(255,255,255,.10); background: var(--card); display: grid; place-items: center; }
   .back:hover { background: var(--line); }
   .crumb { font-size: 11px; letter-spacing: .1em; color: var(--soft); }
@@ -68,13 +77,19 @@
   .cta { height: 56px; border: 0; border-radius: 16px; background: var(--lime); color: var(--page); font-size: 16px; font-weight: 700; display: flex; align-items: center; justify-content: center; gap: 10px; box-shadow: 0 0 32px rgba(198,255,61,.25); transition: background .15s, opacity .2s; }
   .cta:hover { background: var(--lime-hover); }
   .cta:disabled, .back:disabled { opacity: .45; cursor: progress; }
-  :is(.cta, .back, .pin, .beam-card, .retry):focus-visible { outline: 2px solid var(--text); outline-offset: 3px; }
+  :is(.cta, .back, .pin, .beam-card, .retry, .sound):focus-visible { outline: 2px solid var(--text); outline-offset: 3px; }
 
   .spot-card { display: flex; align-items: center; gap: 14px; padding: 10px; border-radius: 20px; background: rgba(18,25,23,.95); border: 1px solid rgba(198,255,61,.3); }
   .spot-card .thumb { width: 112px; height: 63px; flex: none; border-radius: 10px; overflow: hidden; background: #2D3B45; }
   .spot-card .thumb :is(img, video) { width: 100%; height: 100%; display: block; object-fit: cover; }
   .spot-card .t { font-weight: 700; font-size: 17px; line-height: 1.2; }
   .spot-card .d { margin-top: 3px; font-size: 13px; line-height: 1.35; color: var(--soft); }
+  /* module 2: from a DUMBO pin into that spot's ink video */
+  .ink-wipe { position: fixed; left: 50%; top: 50%; width: 40px; height: 40px; margin: -20px 0 0 -20px; border-radius: 50%; background: var(--lime); z-index: 10; transform: scale(0); pointer-events: none; }
+  .pin.locked .face img { filter: grayscale(1) brightness(.55); }
+  .pin.locked:not(.on) .drop { background: #3A4A45; }
+  #btn-ink:disabled { opacity: .5; cursor: not-allowed; box-shadow: none; }
+  .ink-wipe.go { transition: transform .55s cubic-bezier(.6,0,.4,1); transform: scale(90); }
   .spot-card .pill { display: inline-block; margin-top: 6px; padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 700; background: rgba(198,255,61,.14); color: var(--lime); }
 
   /* ---------- Map markers ---------- */
@@ -178,6 +193,11 @@
   </div>
 </header>
 
+<button class="sound" id="btn-sound" type="button" aria-pressed="true" aria-label="Music: Brooklyn beat">
+  <span class="eq" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
+  <svg class="x" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 5 6 9H2v6h4l5 4V5z"/><path d="m23 9-6 6M17 9l6 6"/></svg>
+</button>
+
 <div class="dock">
   <div class="legend mono" id="legend-nyc">
     <span><i class="sw lime"></i>READY TO LIGHT</span>
@@ -196,11 +216,15 @@
       <span class="pill mono" id="card-pill"></span>
     </div>
   </div>
+  <button class="cta" id="btn-ink" type="button" hidden>Ink this spot
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+  </button>
   <button class="cta" id="btn-enter" type="button" disabled>Enter Brooklyn
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
   </button>
 </div>
 
+<div class="ink-wipe" id="ink-wipe" aria-hidden="true"></div>
 <div class="veil" id="veil" role="status" aria-live="polite">
   <div class="veil-box">
     <div id="veil-loading">
@@ -217,6 +241,168 @@
 </div>
 
 <script src="lib/maplibre-gl.js"></script>
+<script>
+// ---------- Brooklyn boom-bap: an original 90 BPM beat synthesised with Web Audio ----------
+// No audio files. Starts only from a user gesture (Enter Brooklyn / sound button).
+// stage('light') → muffled chords + vinyl; stage('dive', s) → filter opens and drums rise over s seconds;
+// stage('near') → full beat; stage('far', s) → back to muffled with drums pulled down.
+window.BrooklynBeat = (() => {
+  const BPM = 90, STEP = 60 / BPM / 4, SWING = 0.16;            // 16th-note grid with a lazy swing
+  const KICK = [[0, 7, 10], [0, 3, 8, 10]];                       // two alternating bars
+  const SNARE = [4, 12];
+  // Am9 → Dm9 → Fmaj9 → E7#9, one chord per bar (MIDI); bass root an octave+ down
+  const CHORDS = [
+    { root: 45, notes: [55, 60, 64, 71] },
+    { root: 38, notes: [53, 57, 60, 64] },
+    { root: 41, notes: [52, 57, 60, 67] },
+    { root: 40, notes: [56, 62, 67, 70] },
+  ];
+  const hz = (m) => 440 * Math.pow(2, (m - 69) / 12);
+
+  let ctx = null, out, filt, drums, music, verb, analyser, timer = 0, step = 0, nextT = 0, noise, crackleSrc;
+  let muted = false;
+  try { muted = localStorage.getItem('nyc-sound') === 'off'; } catch (e) {}
+
+  function build() {
+    ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const comp = ctx.createDynamicsCompressor();
+    comp.threshold.value = -14; comp.ratio.value = 3.5; comp.attack.value = 0.01; comp.release.value = 0.2;
+    filt = ctx.createBiquadFilter(); filt.type = 'lowpass'; filt.frequency.value = 650; filt.Q.value = 0.7;
+    out = ctx.createGain(); out.gain.value = 0.0001;   // exponential ramps can't start from 0
+    analyser = ctx.createAnalyser(); analyser.fftSize = 1024;
+    filt.connect(comp); comp.connect(out); out.connect(analyser); analyser.connect(ctx.destination);
+    drums = ctx.createGain(); drums.gain.value = 0.0001; drums.connect(filt);
+    music = ctx.createGain(); music.gain.value = 1; music.connect(filt);
+    // small room reverb from a generated impulse
+    const len = ctx.sampleRate * 0.5, ir = ctx.createBuffer(2, len, ctx.sampleRate);
+    for (let c = 0; c < 2; c++) { const d = ir.getChannelData(c); for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 3); }
+    verb = ctx.createConvolver(); verb.buffer = ir;
+    const wet = ctx.createGain(); wet.gain.value = 0.22; verb.connect(wet); wet.connect(filt);
+    // shared white noise
+    noise = ctx.createBuffer(1, ctx.sampleRate, ctx.sampleRate);
+    const nd = noise.getChannelData(0); for (let i = 0; i < nd.length; i++) nd[i] = Math.random() * 2 - 1;
+    // vinyl: soft hiss + sparse pops, looped
+    const vl = ctx.sampleRate * 3, vb = ctx.createBuffer(1, vl, ctx.sampleRate), vd = vb.getChannelData(0);
+    for (let i = 0; i < vl; i++) vd[i] = (Math.random() * 2 - 1) * 0.05 + (Math.random() < 0.0006 ? (Math.random() * 2 - 1) * 0.9 : 0);
+    crackleSrc = ctx.createBufferSource(); crackleSrc.buffer = vb; crackleSrc.loop = true;
+    const vf = ctx.createBiquadFilter(); vf.type = 'bandpass'; vf.frequency.value = 2500; vf.Q.value = 0.6;
+    const vg = ctx.createGain(); vg.gain.value = 0.5;
+    crackleSrc.connect(vf); vf.connect(vg); vg.connect(music); crackleSrc.start();
+  }
+
+  // ---- instruments ----
+  function kick(t, v = 1) {
+    const o = ctx.createOscillator(), g = ctx.createGain();
+    o.frequency.setValueAtTime(130, t); o.frequency.exponentialRampToValueAtTime(42, t + 0.14);
+    g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(1.0 * v, t + 0.004); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.42);
+    o.connect(g); g.connect(drums); o.start(t); o.stop(t + 0.45);
+  }
+  function snare(t, v = 1) {
+    const n = ctx.createBufferSource(); n.buffer = noise;
+    const bp = ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 1900; bp.Q.value = 0.8;
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.55 * v, t + 0.003); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.22);
+    n.connect(bp); bp.connect(g); g.connect(drums); g.connect(verb); n.start(t, Math.random() * 0.5); n.stop(t + 0.25);
+    const o = ctx.createOscillator(), og = ctx.createGain(); o.type = 'triangle'; o.frequency.setValueAtTime(190, t); o.frequency.exponentialRampToValueAtTime(140, t + 0.08);
+    og.gain.setValueAtTime(0.0001, t); og.gain.exponentialRampToValueAtTime(0.35 * v, t + 0.003); og.gain.exponentialRampToValueAtTime(0.0001, t + 0.12);
+    o.connect(og); og.connect(drums); o.start(t); o.stop(t + 0.14);
+  }
+  function hat(t, v = 1, open = false) {
+    const n = ctx.createBufferSource(); n.buffer = noise;
+    const hp = ctx.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 7500;
+    const g = ctx.createGain(), d = open ? 0.28 : 0.045;
+    g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.16 * v, t + 0.002); g.gain.exponentialRampToValueAtTime(0.0001, t + d);
+    n.connect(hp); hp.connect(g); g.connect(drums); n.start(t, Math.random() * 0.5); n.stop(t + d + 0.02);
+  }
+  function bass(t, midi, dur) {
+    const o = ctx.createOscillator(), g = ctx.createGain(), lp = ctx.createBiquadFilter();
+    o.type = 'sine'; o.frequency.value = hz(midi); lp.type = 'lowpass'; lp.frequency.value = 400;
+    g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.42, t + 0.01); g.gain.setTargetAtTime(0.0001, t + dur * 0.8, 0.05);
+    o.connect(lp); lp.connect(g); g.connect(drums); o.start(t); o.stop(t + dur + 0.3);
+  }
+  // Rhodes-ish electric piano: soft triangle body + a quick bell "tine", tremolo, through the reverb
+  function keys(t, notes, dur, v = 1) {
+    const bus = ctx.createGain(), lp = ctx.createBiquadFilter(), trem = ctx.createOscillator(), td = ctx.createGain();
+    lp.type = 'lowpass'; lp.frequency.value = 2000; bus.gain.value = 0.9;
+    trem.frequency.value = 4.2; td.gain.value = 0.18; trem.connect(td); td.connect(bus.gain);
+    bus.connect(lp); lp.connect(music); lp.connect(verb);
+    notes.forEach((m, i) => {
+      const f = hz(m), at = t + i * 0.012;                         // tiny strum
+      const o = ctx.createOscillator(), g = ctx.createGain(); o.type = 'triangle'; o.frequency.value = f;
+      g.gain.setValueAtTime(0.0001, at); g.gain.exponentialRampToValueAtTime(0.085 * v, at + 0.006);
+      g.gain.exponentialRampToValueAtTime(0.03 * v, at + 0.6); g.gain.setTargetAtTime(0.0001, at + dur, 0.12);
+      const b = ctx.createOscillator(), bg = ctx.createGain(); b.type = 'sine'; b.frequency.value = f * 4;
+      bg.gain.setValueAtTime(0.0001, at); bg.gain.exponentialRampToValueAtTime(0.02 * v, at + 0.003); bg.gain.exponentialRampToValueAtTime(0.0001, at + 0.25);
+      o.connect(g); g.connect(bus); b.connect(bg); bg.connect(bus);
+      o.start(at); o.stop(at + dur + 0.8); b.start(at); b.stop(at + 0.3);
+    });
+    trem.start(t); trem.stop(t + dur + 0.8);
+  }
+
+  // ---- sequencer (look-ahead scheduling; ~25 ms timer, no per-frame work) ----
+  function schedule(i, t) {
+    const s = i % 16, bar = Math.floor(i / 16), chord = CHORDS[bar % 4], kicks = KICK[bar % 2];
+    const swung = s % 2 ? t + STEP * SWING : t;
+    if (kicks.includes(s)) {
+      kick(t, s === 0 ? 1 : 0.85);
+      const nxt = kicks.find((k) => k > s) ?? 16;
+      bass(t, chord.root, (nxt - s) * STEP);
+    }
+    if (SNARE.includes(s)) snare(t);
+    if (bar % 2 === 1 && s === 15) snare(swung, 0.3);               // ghost note
+    if (s % 2 === 0) hat(t, s % 4 === 0 ? 1 : 0.6, bar % 2 === 1 && s === 14);
+    else if (s === 11 || s === 15) hat(swung, 0.35);
+    if (s === 0) keys(t, chord.notes, STEP * 9);
+    if (s === 10) keys(swung, chord.notes.slice(1), STEP * 4, 0.6);  // chopped re-stab
+  }
+  function tick() {
+    while (nextT < ctx.currentTime + 0.12) { schedule(step, nextT); step++; nextT += STEP; }
+    timer = setTimeout(tick, 25);
+  }
+
+  const ramp = (param, v, secs) => {
+    const now = ctx.currentTime;
+    param.cancelScheduledValues(now); param.setValueAtTime(param.value, now);
+    param.exponentialRampToValueAtTime(Math.max(v, 0.0001), now + Math.max(secs, 0.02));
+  };
+
+  function start() {
+    if (muted) return false;
+    if (!ctx) { build(); nextT = ctx.currentTime + 0.08; tick(); }
+    if (ctx.state === 'suspended') ctx.resume();
+    ramp(out.gain, 0.75, 0.6);
+    return true;
+  }
+  function stage(name, secs = 0.6) {
+    if (!ctx) return;
+    if (name === 'light') { ramp(filt.frequency, 650, 0.3); ramp(drums.gain, 0.0001, 0.3); }
+    if (name === 'dive') { ramp(filt.frequency, 16000, secs); ramp(drums.gain, 1, secs); }
+    if (name === 'near') { ramp(filt.frequency, 16000, 0.3); ramp(drums.gain, 1, 0.3); }
+    if (name === 'far') { ramp(filt.frequency, 900, secs); ramp(drums.gain, 0.3, secs); }
+  }
+  function setMuted(m) {
+    muted = m;
+    try { localStorage.setItem('nyc-sound', m ? 'off' : 'on'); } catch (e) {}
+    if (!ctx) return;
+    if (m) { ramp(out.gain, 0.0001, 0.3); setTimeout(() => muted && ctx.suspend(), 350); }
+    else { ctx.resume(); ramp(out.gain, 0.75, 0.4); }
+  }
+  function onVisibility() { if (!ctx) return; if (document.hidden) ctx.suspend(); else if (!muted) ctx.resume(); }
+  document.addEventListener('visibilitychange', onVisibility);
+  function destroy() {
+    clearTimeout(timer); document.removeEventListener('visibilitychange', onVisibility);
+    if (ctx) { ctx.close(); ctx = null; }
+  }
+  // RMS of the output, for testing
+  function level() {
+    if (!analyser) return 0;
+    const a = new Float32Array(analyser.fftSize); analyser.getFloatTimeDomainData(a);
+    let s = 0, pk = 0; for (const x of a) { s += x * x; pk = Math.max(pk, Math.abs(x)); }
+    return { rms: +Math.sqrt(s / a.length).toFixed(4), peak: +pk.toFixed(3), state: ctx.state, cutoff: Math.round(filt.frequency.value), drums: +drums.gain.value.toFixed(2) };
+  }
+  return { start, stage, setMuted, isMuted: () => muted, started: () => !!ctx, destroy, level };
+})();
+</script>
 <script>
 (() => {
   'use strict';
@@ -236,7 +422,7 @@
       img: IMG[0], video: '00_video/01_布鲁克林桥下.mp4' },
     { id: '02', short: 'BRIDGE LAWN', name: 'Empire Fulton Ferry Lawn', lngLat: [-73.9919, 40.7046],
       desc: 'Open lawn between the two bridges with a straight look at the Brooklyn Bridge.',
-      img: IMG[1], video: '00_video/10_草坪看大桥.mp4' },
+      img: IMG[1], video: '00_video/10_草坪看大桥.mp4', open: true },   // the one spot you can ink for now; the rest show locked
     { id: '03', short: 'COBBLESTONE LANE', name: 'Water Street', lngLat: [-73.9902, 40.7032],
       desc: 'Iron gates and Belgian-block paving, with the Manhattan Bridge at the end of the lane.',
       img: IMG[2], video: '00_video/12_铁门石子路.mp4' },
@@ -244,6 +430,7 @@
       desc: 'Orange tables inside the roofless brick walls of the old Tobacco Warehouse.',
       img: IMG[3], video: '00_video/13_红砖院子_橙桌.mp4' },
   ];
+  const OPEN = Math.max(0, SPOTS.findIndex((s) => s.open));
   const imgThumb = (s) => `<img src="${s.img}" alt="" width="70" height="70">`;
 
   const BOROUGH_CHIPS = [
@@ -361,16 +548,16 @@
   const $ = (id) => document.getElementById(id);
   const ui = {
     veil: $('veil'), loading: $('veil-loading'), error: $('veil-error'), errMsg: $('err-msg'), retry: $('btn-retry'),
-    enter: $('btn-enter'), back: $('btn-back'),
+    enter: $('btn-enter'), back: $('btn-back'), ink: $('btn-ink'), wipe: $('ink-wipe'),
     hudNyc: $('hud-nyc'), hudBk: $('hud-bk'), legNyc: $('legend-nyc'), legBk: $('legend-bk'),
     card: $('spot-card'), cardThumb: $('card-thumb'), cardTitle: $('card-title'), cardDesc: $('card-desc'), cardPill: $('card-pill'),
-    crumb: $('crumb-spot'), boroCount: $('boro-count'), boroSegs: $('boro-segs'), litCount: $('lit-count'), litSegs: $('lit-segs'),
+    sound: $('btn-sound'), crumb: $('crumb-spot'), boroCount: $('boro-count'), boroSegs: $('boro-segs'), litCount: $('lit-count'), litSegs: $('lit-segs'),
   };
   const reducedMQ = matchMedia('(prefers-reduced-motion: reduce)');
 
   // ---------- State ----------
   let map = null, markers = [], pinEls = [], spinRaf = 0, loadTimer = 0, loaded = false;
-  let mode = 'nyc', target = 'nyc', flightToken = 0, near = false, selected = 0;   // mode: nyc | lighting | flying | brooklyn
+  let mode = 'nyc', target = 'nyc', flightToken = 0, near = false, selected = OPEN;   // mode: nyc | lighting | flying | brooklyn
   let bkLit = false, beamEl = null;
   const lit = new Set();
   const mapCleanups = [];
@@ -484,9 +671,9 @@
     SPOTS.forEach((s, i) => {
       const el = document.createElement('button');
       el.type = 'button';
-      el.className = 'pin';
+      el.className = s.open ? 'pin' : 'pin locked';
       el.setAttribute('aria-label', `${s.id} ${s.name}. ${s.desc}`);
-      el.innerHTML = `<span class="drop"><span class="face">${imgThumb(s)}</span></span><span class="base"></span><span class="lbl chip"><span class="n">${s.id}</span>${s.short}</span>`;
+      el.innerHTML = `<span class="drop"><span class="face">${imgThumb(s)}</span></span><span class="base"></span><span class="lbl chip"><span class="n">${s.open ? s.id : '🔒'}</span>${s.short}</span>`;
       el.addEventListener('click', (ev) => { ev.stopPropagation(); stopSpin(); select(i); });
       pinEls.push(el);
       addMarker(el, s.lngLat, 'bottom', 'near-only');
@@ -512,7 +699,9 @@
       : `<video src="${encodeURI(s.video)}" poster="${s.img}" muted loop playsinline autoplay preload="metadata"></video>`;
     ui.cardTitle.textContent = s.name;
     ui.cardDesc.textContent = s.desc;
-    ui.cardPill.textContent = lit.has(i) ? `Spot ${s.id} · lit` : `Spot ${s.id} · next`;
+    ui.cardPill.textContent = !s.open ? `Spot ${s.id} · locked · coming soon` : lit.has(i) ? `Spot ${s.id} · lit` : `Spot ${s.id} · next`;
+    // a locked pin never dead-ends the demo: its button goes to the open spot instead
+    ui.ink.firstChild.nodeValue = s.open ? 'Ink this spot ' : `Ink ${SPOTS[OPEN].short.toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase())} instead `;
     ui.crumb.textContent = 'DUMBO';
     ui.litCount.textContent = `${lit.size} / ${SPOTS.length}`;
     [...ui.litSegs.children].forEach((seg, j) => seg.classList.toggle('lit', j < lit.size));
@@ -537,6 +726,7 @@
     ui.hudNyc.hidden = inBk; ui.legNyc.hidden = inBk; ui.enter.hidden = inBk;
     ui.hudBk.hidden = !inBk; ui.legBk.hidden = !inBk; ui.card.hidden = !inBk;
     ui.enter.disabled = ui.back.disabled = mode === 'flying' || mode === 'lighting' || !loaded;
+    ui.ink.hidden = mode !== 'brooklyn';   // only once the dive has landed in DUMBO
   }
 
   // "Light up" Brooklyn: the slab switches to the bright grid, its outline glow swells and the
@@ -574,7 +764,9 @@
   function go(dest) {
     if (!loaded || mode === 'flying' || mode === 'lighting' || mode === dest) return;
     stopSpin();
+    if (BrooklynBeat.start()) renderSound();       // this click is the user gesture audio needs
     if (dest === 'brooklyn' && !bkLit) {
+      BrooklynBeat.stage('light');
       mode = 'lighting'; renderMode();
       lightUp(() => { mode = 'nyc'; fly(dest); });
       return;
@@ -586,27 +778,60 @@
     target = dest; mode = 'flying'; renderMode();
     const token = ++flightToken;
     const cam = views()[dest];
+    const secs = reducedMQ.matches ? 0.3 : (dest === 'brooklyn' ? 4 : 3.2);
+    BrooklynBeat.stage(dest === 'brooklyn' ? 'dive' : 'far', secs);
     map.once('moveend', () => {
       if (token !== flightToken) return;
       mode = dest; renderMode();
+      BrooklynBeat.stage(dest === 'brooklyn' ? 'near' : 'far', 0.3);
       (dest === 'brooklyn' ? ui.back : ui.enter).focus({ preventScroll: true });
     });
     if (reducedMQ.matches) map.jumpTo(cam);
     else map.flyTo({ ...cam, duration: dest === 'brooklyn' ? 4000 : 3200, curve: 1.2, essential: true });
   }
 
+  // ---------- Sound ----------
+  function renderSound() {
+    const on = !BrooklynBeat.isMuted();
+    ui.sound.setAttribute('aria-pressed', String(on));
+    ui.sound.classList.toggle('playing', on && BrooklynBeat.started());
+    ui.sound.setAttribute('aria-label', on ? 'Mute music' : 'Play music');
+  }
+  ui.sound.addEventListener('click', () => {
+    const turnOn = BrooklynBeat.isMuted() || !BrooklynBeat.started();
+    if (turnOn) {
+      BrooklynBeat.setMuted(false);
+      BrooklynBeat.start();
+      BrooklynBeat.stage(mode === 'brooklyn' ? 'near' : 'far', 0.3);
+    } else {
+      BrooklynBeat.setMuted(true);
+    }
+    renderSound();
+  });
+  renderSound();
+
   // ---------- Wire up ----------
   ui.enter.addEventListener('click', () => go('brooklyn'));
+  // Ink this spot: lime ink floods out from the button, then the spot's video page opens (泼墨小样.html)
+  ui.ink.addEventListener('click', () => {
+    if (!SPOTS[selected].open) select(OPEN);
+    const r = ui.ink.getBoundingClientRect();
+    ui.wipe.style.left = r.left + r.width / 2 + 'px'; ui.wipe.style.top = r.top + r.height / 2 + 'px';
+    ui.wipe.classList.add('go');
+    setTimeout(() => { location.href = '泼墨小样.html?spot=' + SPOTS[selected].id; }, 560);
+  });
+  // coming back from the spot page (bfcache) should not leave the screen covered in ink
+  addEventListener('pageshow', () => ui.wipe.classList.remove('go'));
   ui.back.addEventListener('click', () => go('nyc'));
   ui.retry.addEventListener('click', () => (window.maplibregl ? create() : location.reload()));
   const onReduced = () => { if (reducedMQ.matches) stopSpin(); };
   reducedMQ.addEventListener('change', onReduced);
-  window.addEventListener('pagehide', () => { teardownMap(); reducedMQ.removeEventListener('change', onReduced); }, { once: true });
+  window.addEventListener('pagehide', () => { teardownMap(); BrooklynBeat.destroy(); reducedMQ.removeEventListener('change', onReduced); }, { once: true });
 
   if (!window.maplibregl) showError('lib/maplibre-gl.js is missing.');
   else create();
 
-  window.__nycMap = { get map() { return map; }, go, views, select };
+  window.__nycMap = { get map() { return map; }, go, views, select, beat: BrooklynBeat };
 })();
 </script>
 </body>

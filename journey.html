@@ -1,0 +1,232 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+<title>Just Standup Journey</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bungee&family=JetBrains+Mono:wght@500;700&family=Rubik+Wet+Paint&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet">
+<style>
+/* Runs the whole story at phone size without changing the modules:
+   card 1 NO EQUIPMENT → module 1 warm-up (motion/play.html)
+   card 2 NO PLACE     → module 2 NYC → DUMBO → ink a spot (index.html → 泼墨小样.html)
+   card 3 NO COACH     → module 3 the 10.14 Just Standup app (served at /m3/), played by itself: no phone input needed
+   finale              → chapters.html?card=end: NO EQUIPMENT, NO SPACE, NO COACH, NO PROBLEM. JUST STANDUP
+   Cards are chapters.html?card=N. On a laptop the phone sits beside the step list; on a phone it is full screen.
+   ?mirror=ID turns this page into the laptop copy that follows phone ID (used in journey-monitor.html). */
+:root{--bg:#0B0F0E;--panel:#141A18;--line:rgba(237,243,239,.10);--fg:#EDF3EF;--mute:#8FA39A;--lime:#C6FF3D;--pink:#FF4FA3;--blue:#3D8BFF;--violet:#8A5CFF;color-scheme:dark}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--fg);font-family:"Space Grotesk",system-ui,sans-serif;overflow:hidden}
+body{display:flex;align-items:center;justify-content:center;gap:48px;padding:0 24px}
+button{font:inherit;color:inherit;border:0;background:none;cursor:pointer}
+button:focus-visible{outline:2px solid var(--lime);outline-offset:3px}
+
+.side{width:270px;display:flex;flex-direction:column;gap:22px}
+.chip{align-self:flex-start;font:16px/1 "Bungee",Impact,sans-serif;color:var(--pink);transform:skewX(-12deg) rotate(-2deg);text-shadow:2px 2px 0 #160616}
+.side h1{margin:0;font:400 46px/.95 "Rubik Wet Paint",Impact,sans-serif;transform:skewX(-8deg);text-shadow:3px 3px 0 var(--violet)}
+.side h1 em{font-style:normal;color:var(--lime)}
+ol{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:10px}
+li{display:grid;grid-template-columns:34px 1fr;gap:12px;align-items:center;padding:12px;border-radius:16px;background:var(--panel);border:1px solid var(--line);color:var(--mute);transition:border-color .3s,color .3s}
+li b{width:34px;height:34px;border-radius:50%;display:grid;place-items:center;font:700 13px "JetBrains Mono",monospace;background:rgba(255,255,255,.06)}
+li span{font-size:14px;line-height:1.35}
+li em{display:block;font:normal 11px "Bungee",Impact,sans-serif;letter-spacing:.04em;color:var(--c)}
+li strong{display:block;color:inherit;font-size:15px}
+li.on{border-color:var(--c);color:var(--fg)}
+li.on b{background:var(--c);color:#160616}
+li.done b{background:var(--fg);color:#160616}
+.tools{display:flex;gap:8px}
+.tools button{flex:1;height:40px;border-radius:12px;border:1px solid var(--line);font-size:13px;font-weight:700;color:var(--mute)}
+.tools button:hover{color:var(--fg);border-color:var(--mute)}
+
+.stage{position:relative;height:min(94dvh,calc(100vw*16/9));aspect-ratio:9/16;border-radius:28px;overflow:hidden;background:#0a0807;flex:none;
+  box-shadow:0 0 0 1px rgba(237,243,239,.09),0 30px 80px rgba(0,0,0,.6)}
+.stage iframe{position:absolute;inset:0;width:100%;height:100%;border:0;display:block}
+.wipe{position:absolute;left:50%;top:60%;width:40px;height:40px;margin:-20px 0 0 -20px;border-radius:50%;background:var(--wc,var(--lime));transform:scale(0);pointer-events:none;z-index:5}
+.wipe.go{transition:transform .6s cubic-bezier(.6,0,.4,1);transform:scale(40)}
+.wipe.out{transition:opacity .45s ease-out;transform:scale(40);opacity:0}
+
+@media (max-width:760px){
+  body{padding:0;gap:0}
+  .side{display:none}
+  .stage{width:100vw;height:100dvh;aspect-ratio:auto;border-radius:0}
+}
+</style>
+</head>
+<body>
+<aside class="side">
+  <div class="chip">JUST STANDUP</div>
+  <h1>The<br><em>Journey</em></h1>
+  <ol>
+    <li id="s1" style="--c:var(--pink)"><b>1</b><span><em>NO EQUIPMENT</em><strong>Warm-up</strong>3 straights, 3 uppercuts, 3 shots</span></li>
+    <li id="s2" style="--c:var(--lime)"><b>2</b><span><em>NO PLACE</em><strong>Explore NYC</strong>Dive into DUMBO, ink the Bridge Lawn</span></li>
+    <li id="s3" style="--c:var(--blue)"><b>3</b><span><em>NO COACH</em><strong>Your coach</strong>Scan your space, train with a coach</span></li>
+  </ol>
+  <div class="tools">
+    <button id="restart" type="button">Restart</button>
+    <button id="skip" type="button">Next →</button>
+  </div>
+</aside>
+
+<main class="stage">
+  <iframe id="frame" src="about:blank" title="Just Standup" allow="accelerometer; gyroscope; autoplay; camera; fullscreen; screen-wake-lock"></iframe>
+  <div class="wipe" id="wipe"></div>
+</main>
+
+<script src="motion/core.js"></script>
+<script>
+(() => {
+const $ = s => document.querySelector(s);
+const frame = $('#frame');
+const MIRROR = new URLSearchParams(location.search).get('mirror');
+const COLOR = { 1: 'var(--pink)', 2: 'var(--lime)', 3: 'var(--blue)', 4: 'var(--lime)' };
+const STAGES = [
+  { mod: 1, src: 'chapters.html?card=0' },
+  { mod: 1, src: 'motion/play.html' },
+  { mod: 2, src: 'chapters.html?card=1' },
+  { mod: 2, src: 'index.html' },            // → 泼墨小样.html happens inside module 2
+  { mod: 3, src: 'chapters.html?card=2' },
+  { mod: 3, src: 'm3/' },
+  { mod: 4, src: 'chapters.html?card=end' },   // mod 4 = all three modules done
+];
+let advancing = false;
+
+function rel() {   // the frame's page, e.g. "index.html" or "泼墨小样.html?spot=02"
+  try { const l = frame.contentWindow.location; return decodeURIComponent(l.pathname).replace(/^\//, '') + l.search; } catch (e) { return ''; }
+}
+function stage() {
+  const p = rel(), card = /chapters\.html\?card=(\d)/.exec(p);
+  if (/chapters\.html\?card=end/.test(p)) return 6;
+  if (card) return +card[1] * 2;
+  if (/^m3\//.test(p)) return 5;
+  if (/play\.html/.test(p)) return 1;
+  if (/^index\.html|^泼墨小样\.html/.test(p)) return 3;
+  return -1;
+}
+const mod = () => { const s = stage(); return s < 0 ? 0 : STAGES[s].mod; };
+function render() {
+  const m = mod();
+  ['s1', 's2', 's3'].forEach((id, i) => { $('#' + id).classList.toggle('on', i + 1 === m); $('#' + id).classList.toggle('done', i + 1 < m); });
+}
+
+// ink in the next module's colour floods the phone, the next page loads underneath, then the ink fades
+function go(src, m) {
+  if (advancing) return;
+  advancing = true;
+  const w = $('#wipe'); w.style.setProperty('--wc', COLOR[m] || 'var(--lime)'); w.className = 'wipe go';
+  setTimeout(() => {
+    frame.src = src;
+    frame.addEventListener('load', () => setTimeout(() => {
+      w.className = 'wipe out';
+      setTimeout(() => { w.className = 'wipe'; advancing = false; }, 500);
+    }, 300), { once: true });
+  }, 650);
+}
+/* Module 3 plays itself: press the app's own buttons in order, lingering on each screen.
+   It stops on the final summary. Runs on the phone and in the laptop copy alike. */
+const PLAN = [
+  ['[data-action=scanned]', 2500],                 // Scan your space → Build my 3D space
+  ['[data-action=built]:not([disabled])', 1500],   // build finishes → See my space
+  ['[data-action=enterSpace]', 3000],              // Enter my space
+  ['[data-action=start]', 3000],                   // Start my minutes / Continue · stop N / See today's summary
+  ['[data-action=arrive]', 4000],                  // walk there → I'm here · Show the move
+  ['[data-complete]', 7000],                       // the coach video → Done with this move
+];
+let pilot = 0;
+function autopilot() {
+  clearInterval(pilot);
+  let seen = null, since = 0;
+  pilot = setInterval(() => {
+    if (stage() !== 5) return clearInterval(pilot);
+    let d; try { d = frame.contentDocument; } catch (e) { return; }
+    const hit = PLAN.map(([q, wait]) => [d.querySelector(q), wait]).find(([el]) => el);
+    if (!hit) { seen = null; return; }                // e.g. still building, or the summary: just watch
+    const [el, wait] = hit;
+    if (el !== seen) { seen = el; since = Date.now(); return; }
+    if (Date.now() - since >= wait) { seen = null; el.click(); }
+  }, 250);
+}
+frame.addEventListener('load', () => { if (stage() === 5) autopilot(); });
+
+function advance() { const n = stage() + 1; if (n > 0 && n < STAGES.length) go(STAGES[n].src, STAGES[n].mod); }
+
+if (!MIRROR) phone(); else mirror();
+
+/* ---------- on the phone: run the story and report it to the laptop ---------- */
+function phone() {
+  frame.src = STAGES[0].src;
+  Motion.hello('journey'); Motion.startLink();
+  addEventListener('message', e => { if (e.origin === location.origin && e.data && e.data.type === 'chapter-next') advance(); });
+  // a module is done when its own screen says so; 1 s later (the fanfare has just played) move on
+  let doneAt = 0;
+  setInterval(() => {
+    render();
+    const s = stage(); let done = false;
+    try {
+      const d = frame.contentDocument;
+      if (s === 1) done = d.querySelector('#capK').textContent === 'WARM-UP DONE';
+      if (s === 3) done = !!d.querySelector('#status') && d.querySelector('#status').textContent === 'CLAIMED';
+      if (s === 5) done = /complete/i.test((d.querySelector('h1') || {}).textContent || '');
+    } catch (e) {}
+    if (!done || advancing) { doneAt = 0; return; }
+    doneAt = doneAt || Date.now();
+    // 1 s after the module says done; the coach summary stays up a little longer before the finale
+    if (Date.now() - doneAt > (s === 5 ? 3000 : 1000)) { doneAt = 0; advance(); }
+  }, 300);
+  // report the page and each tap, so the laptop copy can follow (module 1 streams its own state)
+  const TAPS = ['#goBtn', '#btn-enter', '#btn-back', '#btn-ink', '#btn-sound', '#btn-retry', '#cta', 'a.sect'];
+  const pathOf = el => { const p = []; for (; el && el.parentElement && el !== frame.contentDocument.body; el = el.parentElement) p.unshift([...el.parentElement.children].indexOf(el)); return p; };
+  function onTap(e) {
+    const d = frame.contentDocument, t = e.target;
+    const sel = TAPS.find(q => t.closest(q));
+    if (sel) return Motion.emit({ type: 'tap', sel });
+    for (const q of ['.pin', '.seg']) {
+      const el = t.closest(q);
+      if (el) return Motion.emit({ type: 'tap', sel: q, i: [...d.querySelectorAll(q)].indexOf(el) });
+    }
+    const st = t.closest('#stage');
+    if (st) { const r = st.getBoundingClientRect(); return Motion.emit({ type: 'tap', sel: '#stage', fx: (e.clientX - r.left) / r.width, fy: (e.clientY - r.top) / r.height }); }
+    const btn = t.closest('button, a, [role="button"], label, input');   // module 3 and anything else: by position in the page
+    if (btn) Motion.emit({ type: 'tap', path: pathOf(btn) });
+  }
+  frame.addEventListener('load', () => {
+    const s = stage();
+    Motion.emit({ type: 'journey', step: s < 0 ? 0 : STAGES[s].mod, stage: s, page: rel() });
+    if (s !== 1) try { frame.contentDocument.addEventListener('click', onTap, true); } catch (e) {}
+  });
+  $('#restart').onclick = () => go(STAGES[0].src, 1);
+  $('#skip').onclick = advance;
+}
+
+/* ---------- on the laptop: follow the phone ---------- */
+function mirror() {
+  const M1 = 'motion/play.html?mirror=' + encodeURIComponent(MIRROR);
+  frame.src = STAGES[0].src;
+  $('.tools').hidden = true;
+  setInterval(render, 300);
+  function replay(ev, tries = 0) {   // targets can still be busy or hidden here (e.g. the map is flying), so retry briefly
+    let d; try { d = frame.contentDocument; } catch (e) { return; }
+    let el;
+    if (ev.path) { el = d.body; for (const i of ev.path) el = el && el.children[i]; }
+    else el = ev.sel === '.pin' || ev.sel === '.seg' ? d.querySelectorAll(ev.sel)[ev.i] : d.querySelector(ev.sel);
+    if (!el || el.disabled || el.hidden || el.closest('[hidden]')) { if (tries < 30) setTimeout(() => replay(ev, tries + 1), 300); return; }
+    if (ev.sel === '#stage') {
+      const r = el.getBoundingClientRect();
+      el.dispatchEvent(new MouseEvent('click', { bubbles: true, clientX: r.left + ev.fx * r.width, clientY: r.top + ev.fy * r.height }));
+    } else el.click();
+  }
+  const handle = msg => (msg.events || []).forEach(ev => {
+    if (ev.type === 'journey' && ev.page) {
+      const want = /play\.html/.test(ev.page) ? M1 : ev.page;
+      if (decodeURIComponent(rel()) !== decodeURIComponent(want)) go(want, ev.step);
+    }
+    if (ev.type === 'tap' && stage() !== 1 && stage() !== 5) replay(ev);   // module 3 plays itself here too
+  });
+  const bus = parent !== window && parent.MONITOR_BUS;   // inside journey-monitor.html: share its single stream
+  if (bus) bus.on(handle);
+  else new EventSource('/stream?id=' + encodeURIComponent(MIRROR)).onmessage = e => handle(JSON.parse(e.data));
+}
+})();
+</script>
+</body>
+</html>

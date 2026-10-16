@@ -6,9 +6,12 @@
 // 手机上要 https，另开一个终端跑：cloudflared tunnel --url http://localhost:5190
 const http = require('http'), fs = require('fs'), path = require('path'), { execFile } = require('child_process');
 const ROOT = __dirname, PORT = 5190, CSV_DIR = path.join(ROOT, 'motion', 'csv');
+// module 3 = the 10.14 Just Standup app, served unchanged under /m3/ so phones reach it through the same tunnel
+const M3 = process.env.M3_DIR || path.join(ROOT, '..', '00_1014_黑客松', 'move-at-work', 'web');
 const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.mjs': 'text/javascript', '.css': 'text/css',
   '.json': 'application/json', '.geojson': 'application/json', '.png': 'image/png', '.jpg': 'image/jpeg', '.svg': 'image/svg+xml',
-  '.mp3': 'audio/mpeg', '.wav': 'audio/wav', '.mp4': 'video/mp4', '.csv': 'text/csv' };
+  '.mp3': 'audio/mpeg', '.wav': 'audio/wav', '.mp4': 'video/mp4', '.csv': 'text/csv', '.webmanifest': 'application/manifest+json',
+  '.ply': 'application/octet-stream', '.webp': 'image/webp', '.m4a': 'audio/mp4' };
 let count = 0;
 const DEV_FILE = path.join(ROOT, 'motion', 'devices.json');
 const devices = fs.existsSync(DEV_FILE) ? JSON.parse(fs.readFileSync(DEV_FILE, 'utf8')) : {};
@@ -23,11 +26,12 @@ http.createServer((req, res) => {
   if (/\.trycloudflare\.com$/.test(host)) publicUrl = 'https://' + host;
   if (url.pathname === '/public') {
     res.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store' });
-    return res.end(JSON.stringify({ url: publicUrl ? publicUrl + '/motion/play.html' : '' }));
+    return res.end(JSON.stringify({ url: publicUrl ? publicUrl + '/motion/play.html' : '', journey: publicUrl ? publicUrl + '/journey.html' : '' }));
   }
-  if (url.pathname === '/qr.svg') {   // 玩家页二维码（用 brew 装的 qrencode 生成）
+  if (url.pathname === '/qr.svg') {   // 玩家页二维码（用 brew 装的 qrencode 生成）；?p=journey 时指向完整流程 journey.html
     if (!publicUrl) { res.writeHead(404); return res.end(); }
-    return execFile(fs.existsSync('/opt/homebrew/bin/qrencode') ? '/opt/homebrew/bin/qrencode' : 'qrencode', ['-t', 'SVG', '-m', '1', '-o', '-', publicUrl + '/motion/play.html'], (err, out) => {
+    const page = url.searchParams.get('p') === 'journey' ? '/journey.html' : '/motion/play.html';
+    return execFile(fs.existsSync('/opt/homebrew/bin/qrencode') ? '/opt/homebrew/bin/qrencode' : 'qrencode', ['-t', 'SVG', '-m', '1', '-o', '-', publicUrl + page], (err, out) => {
       if (err) { res.writeHead(500); return res.end(String(err)); }
       res.writeHead(200, { 'content-type': 'image/svg+xml', 'cache-control': 'no-store' }); res.end(out);
     });
@@ -64,7 +68,7 @@ http.createServer((req, res) => {
       if (!d || !/^[A-Z0-9]{4}$/.test(id)) return;
       if (devices[id]) devices[id].last = new Date().toISOString();
       const L = live[id] || (live[id] = { state: null });
-      (d.events || []).forEach(e => { if (e.type === 'state') L.state = e; });
+      (d.events || []).forEach(e => { if (e.type === 'state') L.state = e; if (e.type === 'journey') L.journey = e; });
       const msg = 'data: ' + JSON.stringify({ id, at: Date.now(), ...d }) + '\n\n';
       [...subs].forEach(c => { if (c.id === id || c.id === '*') c.res.write(msg); });
     });
@@ -73,7 +77,8 @@ http.createServer((req, res) => {
     const id = url.searchParams.get('id') || '*';
     res.writeHead(200, { 'content-type': 'text/event-stream', 'cache-control': 'no-store', connection: 'keep-alive' });
     res.write('retry: 1000\n\n');
-    if (live[id] && live[id].state) res.write('data: ' + JSON.stringify({ id, at: Date.now(), frames: [], events: [live[id].state] }) + '\n\n');
+    const known = live[id] ? [live[id].journey, live[id].state].filter(Boolean) : [];   // a page opened mid-way catches up
+    if (known.length) res.write('data: ' + JSON.stringify({ id, at: Date.now(), frames: [], events: known }) + '\n\n');
     const c = { id, res }; subs.add(c);
     const ka = setInterval(() => res.write(': ka\n\n'), 15000);
     req.on('close', () => { subs.delete(c); clearInterval(ka); });
@@ -83,14 +88,27 @@ http.createServer((req, res) => {
     res.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store' });
     return res.end(JSON.stringify(Object.values(devices).sort((a, b) => b.last.localeCompare(a.last)), null, 2));
   }
-  let file = path.join(ROOT, decodeURIComponent(url.pathname));
-  if (!file.startsWith(ROOT)) { res.writeHead(403); return res.end(); }
+  const inM3 = url.pathname === '/m3' || url.pathname.startsWith('/m3/');
+  if (url.pathname === '/m3') { res.writeHead(301, { location: '/m3/' }); return res.end(); }
+  const base = inM3 ? M3 : ROOT;
+  let file = path.join(base, decodeURIComponent(inM3 ? url.pathname.slice(3) : url.pathname));
+  if (!file.startsWith(base)) { res.writeHead(403); return res.end(); }
   // 不对外提供 .env / .venv / .git 这类点开头的路径（.env 里是赞助商密钥）
-  if (path.relative(ROOT, file).split(path.sep).some(s => s.startsWith('.'))) { res.writeHead(404); return res.end('not found'); }
+  if (path.relative(base, file).split(path.sep).some(s => s.startsWith('.'))) { res.writeHead(404); return res.end('not found'); }
   if (fs.existsSync(file) && fs.statSync(file).isDirectory()) file = path.join(file, 'index.html');
-  fs.readFile(file, (err, data) => {
-    if (err) { res.writeHead(404); return res.end('not found'); }
-    res.writeHead(200, { 'content-type': TYPES[path.extname(file).toLowerCase()] || 'application/octet-stream', 'cache-control': 'no-store' });
-    res.end(data);
+  // stream files and honour Range requests: iPhone Safari only plays video when the server can send byte ranges
+  fs.stat(file, (err, st) => {
+    if (err || !st.isFile()) { res.writeHead(404); return res.end('not found'); }
+    const type = TYPES[path.extname(file).toLowerCase()] || 'application/octet-stream';
+    const m = /^bytes=(\d*)-(\d*)$/.exec(req.headers.range || '');
+    if (m && (m[1] || m[2])) {
+      let start = m[1] ? +m[1] : st.size - +m[2], end = m[1] && m[2] ? +m[2] : st.size - 1;
+      if (start >= st.size || start > end) { res.writeHead(416, { 'content-range': `bytes */${st.size}` }); return res.end(); }
+      end = Math.min(end, st.size - 1);
+      res.writeHead(206, { 'content-type': type, 'content-range': `bytes ${start}-${end}/${st.size}`, 'accept-ranges': 'bytes', 'content-length': end - start + 1, 'cache-control': 'no-store' });
+      return fs.createReadStream(file, { start, end }).pipe(res);
+    }
+    res.writeHead(200, { 'content-type': type, 'content-length': st.size, 'accept-ranges': 'bytes', 'cache-control': 'no-store' });
+    fs.createReadStream(file).pipe(res);
   });
 }).listen(PORT, () => console.log(`http://localhost:${PORT}/motion/play.html`));
