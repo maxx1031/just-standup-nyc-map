@@ -1,1 +1,11 @@
 .DS_Store
+motion/csv/
+motion/devices.json
+# 密钥
+.env
+.env.*
+!.env.example
+# Python
+.venv/
+__pycache__/
+*.pyc

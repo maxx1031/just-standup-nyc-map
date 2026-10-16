@@ -1,0 +1,712 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Brooklyn Ink</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Anton&family=Bungee&family=JetBrains+Mono:wght@500;700&family=Permanent+Marker&family=Rubik+Wet+Paint&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet">
+<style>
+  /* Tokens — same ink world as Ink Mode Lab */
+  :root {
+    --bg: #0B0F0E; --text: #EDF3EF; --muted: #8FA39A;
+    --lime: #C6FF3D; --cyan: #5EE6D0; --pink: #FF4FA3; --violet: #8A5CFF; --night: #160616;
+    --drip: "Rubik Wet Paint", "Anton", Impact, sans-serif;
+    --street: "Bungee", "Anton", Impact, sans-serif;
+    --marker: "Permanent Marker", "Space Grotesk", sans-serif;
+    --mono: "JetBrains Mono", ui-monospace, monospace;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text); font-family: "Space Grotesk", system-ui, sans-serif; overflow: hidden; }
+  body { display: grid; place-items: center; background-image: radial-gradient(rgba(198,255,61,.05) 1px, transparent 1px); background-size: 22px 22px; }
+  button { font: inherit; color: inherit; border: 0; background: none; padding: 0; cursor: pointer; }
+
+  /* Phone-shaped stage; full screen on a real phone */
+  .stage { position: relative; height: min(94dvh, calc(100vw * 16 / 9)); aspect-ratio: 9 / 16; border-radius: 28px; overflow: hidden; background: #160b34; container-type: size; isolation: isolate; user-select: none; -webkit-user-select: none; -webkit-tap-highlight-color: transparent; touch-action: manipulation; box-shadow: 0 0 0 1px rgba(237,243,239,.09), 0 30px 80px rgba(0,0,0,.6); }
+  @media (max-width: 560px) { .stage { width: 100vw; height: 100dvh; aspect-ratio: auto; border-radius: 0; } }
+  #gl { position: absolute; inset: 0; width: 100%; height: 100%; display: block; cursor: crosshair; }
+
+  .hud { position: absolute; inset: 0; z-index: 5; pointer-events: none; display: flex; flex-direction: column; padding: max(5cqw, env(safe-area-inset-top)) 5cqw max(5cqw, env(safe-area-inset-bottom)); }
+  .hud button { pointer-events: auto; }
+  .top { display: flex; justify-content: space-between; align-items: flex-start; gap: 3cqw; }
+  .chip { font: 4.4cqw/1 var(--street); color: var(--night); background: var(--pink); padding: 1.6cqw 2.4cqw 1.2cqw; transform: skewX(-14deg) rotate(-3deg); box-shadow: 1cqw 1cqw 0 var(--night); white-space: nowrap; }
+  .pill { margin-top: 3.4cqw; display: flex; align-items: center; gap: 1.6cqw; font: 2.8cqw/1 var(--street); padding: 1.6cqw 2.6cqw; border-radius: 99px; background: rgba(22,6,22,.72); transform: skewX(-12deg) rotate(-2deg); white-space: nowrap; }
+  .pill i { width: 1.8cqw; height: 1.8cqw; border-radius: 50%; background: var(--lime); box-shadow: 0 0 2cqw var(--lime); }
+  .turf { min-width: 27cqw; padding: 2cqw 2.6cqw; border-radius: 3cqw; background: rgba(22,6,22,.72); transform: skewX(-8deg) rotate(2deg); display: grid; grid-template-columns: auto 1fr; align-items: baseline; gap: 1cqw 2cqw; }
+  .turf span { font: 2.6cqw/1 var(--street); color: var(--muted); }
+  .turf b { font: 400 8cqw/1 var(--drip); color: var(--lime); text-align: right; font-variant-numeric: tabular-nums; }
+  .turf .bar { grid-column: 1 / -1; height: 1.2cqw; border-radius: 1cqw; background: rgba(237,243,239,.14); overflow: hidden; }
+  .turf .bar i { display: block; height: 100%; width: 0; background: linear-gradient(90deg, var(--lime), var(--pink)); transition: width .3s; }
+
+  .cap { margin-top: auto; margin-bottom: 4.5cqw; transform: skewX(-12deg) rotate(-4deg); transform-origin: left bottom; }
+  .cap h2 { margin: 0; font: 400 13cqw/.95 var(--drip); color: var(--text); text-shadow: 1.2cqw 1.2cqw 0 var(--violet), -.5cqw -.5cqw 0 var(--night); }
+  .cap h2 em { font-style: normal; color: var(--lime); }
+  .cap p { margin: 2.2cqw 0 0; font: 4.2cqw/1.2 var(--marker); color: var(--cyan); text-shadow: 0 .4cqw 2cqw #000; }
+  .cap.swap { animation: wob .5s ease-out; }
+  @keyframes wob { 0% { transform: skewX(4deg) rotate(4deg) scale(1.15); opacity: 0; } 60% { transform: skewX(-16deg) rotate(-6deg) scale(.97); opacity: 1; } 100% { transform: skewX(-12deg) rotate(-4deg); } }
+
+  .ctrls { display: flex; gap: 2.6cqw; }
+  .btn { height: 13cqw; border-radius: 4cqw; font: 4.4cqw/1 var(--street); display: grid; place-items: center; transform: skewX(-10deg); }
+  .ink { flex: 1; background: var(--pink); color: var(--night); box-shadow: 0 1.2cqw 0 #A3236A; }
+  .ink:active { transform: skewX(-10deg) translateY(1cqw); box-shadow: none; }
+  .sq { width: 15cqw; background: rgba(22,6,22,.8); color: var(--lime); box-shadow: inset 0 0 0 .5cqw var(--lime); font-size: 3.4cqw; }
+  .sq.on { background: #ff3b3b; color: #fff; box-shadow: none; }
+  .rec { position: absolute; left: 50%; top: 4cqw; transform: translateX(-50%); z-index: 6; font: 700 3cqw var(--mono); background: #ff3b3b; color: #fff; padding: 1.2cqw 2.6cqw; border-radius: 99px; }
+  .load { position: absolute; inset: 0; z-index: 8; display: grid; place-items: center; text-align: center; padding: 8cqw; background: #160b34; font: 5cqw/1.3 var(--street); color: var(--lime); transition: opacity .4s; }
+  @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+</style>
+</head>
+<body>
+<div class="stage" id="stage">
+  <canvas id="gl"></canvas>
+  <div class="hud">
+    <div class="top">
+      <div style="display:flex;flex-direction:column;align-items:flex-start">
+        <div class="chip">JUST STANDUP</div>
+        <div class="pill"><i></i>BROOKLYN · INK MODE</div>
+      </div>
+      <div class="turf"><span>TURF</span><b id="turf">0%</b><div class="bar"><i id="bar"></i></div></div>
+    </div>
+    <div class="cap" id="cap"><h2 id="capT"></h2><p id="capS"></p></div>
+    <div class="ctrls">
+      <button class="btn ink" id="inkBtn">INK IT!</button>
+      <button class="btn sq" id="pauseBtn" aria-label="Pause">❚❚</button>
+      <button class="btn sq" id="recBtn" aria-label="Record one loop">REC</button>
+    </div>
+  </div>
+  <div class="rec" id="recTag" hidden>● REC</div>
+  <div class="load" id="load">MIXING PAINT…</div>
+</div>
+
+<script type="module">
+import * as THREE from './lib/three.module.min.js';
+
+const $ = id => document.getElementById(id);
+const INK = ['#C6FF3D', '#FF4FA3', '#5EE6D0', '#8A5CFF'];
+const NIGHT = '#160616';
+const stage = $('stage'), cv = $('gl');
+
+// Graffiti textures are painted with the web fonts, so wait for them (offline → Impact fallback).
+await Promise.race([
+  Promise.all(['Rubik Wet Paint', 'Bungee', 'Permanent Marker'].map(f => document.fonts.load(`80px "${f}"`))),
+  new Promise(r => setTimeout(r, 2500)),
+]).catch(() => {});
+
+// ---------------------------------------------------------------- 2D paint helpers
+function rng(a) { return () => { a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+const R = rng(1883);                      // fixed seed: the city looks the same every load
+const pick = a => a[(R() * a.length) | 0];
+function shade(hex, k) {
+  const n = parseInt(hex.slice(1), 16), f = c => Math.max(0, Math.min(255, Math.round(c * (1 + k))));
+  return `rgb(${f(n >> 16)},${f((n >> 8) & 255)},${f(n & 255)})`;
+}
+function blob(g, r, rand) {
+  const n = 24, p = [];
+  for (let i = 0; i < n; i++) {
+    const a = i / n * Math.PI * 2; let rr = r * (.8 + .28 * rand());
+    if (rand() < .22) rr *= 1.18 + .35 * rand();
+    p.push([Math.cos(a) * rr, Math.sin(a) * rr]);
+  }
+  const mid = (a, b) => [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
+  g.beginPath(); const m = mid(p[n - 1], p[0]); g.moveTo(m[0], m[1]);
+  for (let i = 0; i < n; i++) { const q = mid(p[i], p[(i + 1) % n]); g.quadraticCurveTo(p[i][0], p[i][1], q[0], q[1]); }
+  g.closePath();
+}
+function splat(g, x, y, r, color, o = {}) {
+  const rand = o.rand || Math.random;
+  g.save(); g.translate(x, y);
+  g.fillStyle = shade(color, -.38); g.save(); g.scale(1.07, 1.07); blob(g, r, rand); g.fill(); g.restore();
+  g.fillStyle = color; blob(g, r, rand); g.fill();
+  for (let i = 0; i < 9; i++) {
+    const a = rand() * Math.PI * 2, d = r * (1.1 + rand() * .85);
+    g.beginPath(); g.arc(Math.cos(a) * d, Math.sin(a) * d, r * (.05 + rand() * .12), 0, 7); g.fill();
+  }
+  if (o.drips) for (let i = 0, k = 2 + (rand() * 3 | 0); i < k; i++) {
+    const dx = (rand() - .5) * r * 1.1, len = r * (.5 + rand() * 1.2), w = r * (.08 + rand() * .08);
+    g.fillRect(dx - w / 2, 0, w, len); g.beginPath(); g.arc(dx, len, w * .9, 0, 7); g.fill();
+  }
+  if (o.gloss !== false) { g.fillStyle = 'rgba(255,255,255,.28)'; g.beginPath(); g.ellipse(-r * .32, -r * .34, r * .2, r * .11, -.6, 0, 7); g.fill(); }
+  g.restore();
+}
+function star(g, x, y, r) {
+  g.beginPath();
+  for (let i = 0; i < 8; i++) { const a = i * Math.PI / 4, rr = i % 2 ? r * .3 : r; g.lineTo(x + Math.cos(a) * rr, y + Math.sin(a) * rr); }
+  g.closePath(); g.fill();
+}
+function crown(g, x, y, s, color) {     // the NYC crown
+  g.save(); g.translate(x, y); g.strokeStyle = color; g.lineWidth = s * .14; g.lineJoin = 'round';
+  g.beginPath(); g.moveTo(-s, s * .4); g.lineTo(-s, -s * .3); g.lineTo(-s * .5, s * .1); g.lineTo(0, -s * .6); g.lineTo(s * .5, s * .1); g.lineTo(s, -s * .3); g.lineTo(s, s * .4); g.closePath(); g.stroke();
+  [[-s, -s * .3], [0, -s * .6], [s, -s * .3]].forEach(([a, b]) => { g.beginPath(); g.arc(a, b - s * .2, s * .11, 0, 7); g.stroke(); });
+  g.restore();
+}
+// A "piece": halo, 3D extrusion, black outline, gradient fill, drips, sparkles.
+function piece(g, text, x, y, size, maxW, o = {}) {
+  g.save(); g.translate(x, y); g.rotate(o.rot ?? (R() - .5) * .12);
+  g.font = `${size}px "${o.font || 'Rubik Wet Paint'}", Impact, sans-serif`;
+  g.textAlign = 'center'; g.textBaseline = 'middle'; g.lineJoin = 'round';
+  const w = g.measureText(text).width, k = Math.min(1, maxW / (w + size * .3)); g.scale(k, k);
+  const [a, b] = o.fill || [INK[0], INK[2]];
+  g.lineWidth = size * .28; g.strokeStyle = o.halo || '#EDF3EF'; g.strokeText(text, 0, 0);
+  g.fillStyle = o.ext || '#3b145e';
+  for (let i = Math.round(size * .12); i > 0; i--) g.fillText(text, i * .8, i);
+  g.lineWidth = size * .1; g.strokeStyle = NIGHT; g.strokeText(text, 0, 0);
+  const gr = g.createLinearGradient(0, -size / 2, 0, size / 2); gr.addColorStop(0, a); gr.addColorStop(1, b);
+  g.fillStyle = gr; g.fillText(text, 0, 0);
+  if (o.drips !== false) {
+    g.fillStyle = b;
+    for (let i = 0; i < 5; i++) { const dx = (R() - .5) * w * .8, len = size * (.2 + R() * .6), dw = size * .05; g.fillRect(dx - dw / 2, size * .3, dw, len); g.beginPath(); g.arc(dx, size * .3 + len, dw * .8, 0, 7); g.fill(); }
+  }
+  g.fillStyle = '#fff';
+  for (let i = 0; i < 3; i++) star(g, (R() - .5) * w * .9, (R() - .5) * size * .6, size * .08);
+  g.restore();
+}
+function tag(g, text, x, y, size, color) {
+  g.save(); g.translate(x, y); g.rotate((R() - .5) * .4);
+  g.font = `${size}px "Permanent Marker", sans-serif`; g.textAlign = 'center'; g.fillStyle = color; g.fillText(text, 0, 0);
+  g.restore();
+}
+function arch(g, x, y, w, h) { g.beginPath(); g.moveTo(x, y + h); g.lineTo(x, y + w / 2); g.arc(x + w / 2, y + w / 2, w / 2, Math.PI, 0); g.lineTo(x + w, y + h); g.closePath(); }
+function bricks(g, W, H, base, ppu) {
+  g.fillStyle = '#2a0f22'; g.fillRect(0, 0, W, H);
+  const bh = ppu * .28, bw = ppu * .62;
+  for (let y = 0, row = 0; y < H; y += bh, row++)
+    for (let x = -(row % 2) * bw / 2; x < W; x += bw) { g.fillStyle = shade(base, (R() - .5) * .3); g.fillRect(x + 1, y + 1, bw - 2, bh - 2); }
+}
+function windows(g, W, H, ppu, y0, y1) {          // DUMBO warehouse arched windows
+  const floorH = 3 * ppu, cols = Math.max(2, Math.floor(W / (2.3 * ppu)));
+  const cw = W / cols, ww = cw * .5, wh = floorH * .58;
+  for (let fy = y0 + floorH * .2; fy + wh <= y1; fy += floorH)
+    for (let c = 0; c < cols; c++) {
+      const x = c * cw + (cw - ww) / 2;
+      g.fillStyle = '#d9c9e8'; arch(g, x - ppu * .1, fy - ppu * .1, ww + ppu * .2, wh + ppu * .16); g.fill();
+      g.fillStyle = R() < .3 ? '#FFE45E' : R() < .5 ? '#2a2550' : '#1b1638'; arch(g, x, fy, ww, wh); g.fill();
+      g.fillStyle = '#d9c9e8'; g.fillRect(x + ww / 2 - ppu * .035, fy + ww / 2, ppu * .07, wh - ww / 2); g.fillRect(x, fy + wh * .58, ww, ppu * .06);
+    }
+}
+function fireEscape(g, x, y0, y1, ppu) {
+  g.strokeStyle = g.fillStyle = NIGHT; g.lineWidth = ppu * .07;
+  const fw = 2.6 * ppu, floorH = 3 * ppu;
+  for (let y = y0 + floorH * .85; y < y1; y += floorH) {
+    g.fillRect(x - fw / 2, y, fw, ppu * .1);
+    g.strokeRect(x - fw / 2, y - ppu * .7, fw, ppu * .7);
+    for (let k = 1; k < 6; k++) { g.beginPath(); g.moveTo(x - fw / 2 + k * fw / 6, y - ppu * .7); g.lineTo(x - fw / 2 + k * fw / 6, y); g.stroke(); }
+    g.beginPath(); g.moveTo(x - fw * .4, y); g.lineTo(x + fw * .4, y - floorH + ppu * .1); g.stroke();
+  }
+}
+const TAGS = ['BK', '718', 'DUMBO', 'SQUAT', 'REPS', 'STAND UP', 'GO!', 'NO EXCUSES', 'FRESH', 'KINGS', 'ONE MORE', '10/10', 'YO', 'EAST RIVER'];
+// One wall face: bricks, windows, a street-level graffiti band (or a full mural).
+function paintWall(w, h, s) {
+  const ppu = Math.min(72, 1024 / Math.max(w, h));
+  const c = document.createElement('canvas'); c.width = Math.round(w * ppu); c.height = Math.round(h * ppu); c.ppu = ppu;
+  const g = c.getContext('2d'), W = c.width, H = c.height;
+  bricks(g, W, H, s.brick || '#7b2b45', ppu);
+  const band = s.mural ? 0 : Math.max(H - 4.2 * ppu, H * .45);
+  const winTop = s.top ? 3.3 * ppu : 0;
+  if (!s.mural) windows(g, W, H, ppu, winTop, band - ppu * .3);
+  if (s.fire) fireEscape(g, W * .74, winTop, band, ppu);
+  if (s.top) piece(g, s.top, W / 2, 1.7 * ppu, 2.3 * ppu, W * .92, { font: 'Bungee', fill: ['#EDF3EF', '#FF4FA3'], halo: NIGHT, rot: 0, drips: false });
+  for (let i = 0; i < 3; i++) splat(g, R() * W, band + R() * (H - band), ppu * (.5 + R() * .9), pick(INK), { gloss: false, drips: true, rand: R });
+  for (let i = 0, n = Math.round(W / (ppu * 2.6)); i < n; i++)
+    tag(g, pick(TAGS), R() * W, band + ppu * .7 + R() * (H - band - ppu * .9), ppu * (.42 + R() * .35), pick(['#EDF3EF', NIGHT, '#FF4FA3', '#5EE6D0', '#FFE45E']));
+  if (s.piece) piece(g, s.piece, W / 2, band + (H - band) * (s.mural ? .42 : .5), (H - band) * (s.mural ? .45 : .62), W * .9, s);
+  if (s.sub) tag(g, s.sub, W / 2, H * .8, ppu * .95, '#C6FF3D');
+  if (R() < .7) crown(g, ppu + R() * (W - 2 * ppu), band + ppu * .6, ppu * .45, '#FFE45E');
+  const gr = g.createLinearGradient(0, H - ppu * 1.2, 0, H); gr.addColorStop(0, 'rgba(0,0,0,0)'); gr.addColorStop(1, 'rgba(0,0,0,.45)');
+  g.fillStyle = gr; g.fillRect(0, H - ppu * 1.2, W, ppu * 1.2);
+  return c;
+}
+
+// ---------------------------------------------------------------- renderer / scene
+let renderer;
+try { renderer = new THREE.WebGLRenderer({ canvas: cv, antialias: true }); }
+catch (e) { $('load').textContent = 'WebGL is off in this browser, so the 3D scene cannot run.'; throw e; }
+renderer.setPixelRatio(Math.min(devicePixelRatio || 1, 2));
+const scene = new THREE.Scene();
+scene.fog = new THREE.Fog('#2a0f4a', 70, 340);
+const camera = new THREE.PerspectiveCamera(62, 9 / 16, .1, 1500);
+
+function canvasTex(c, repeat) {
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4;
+  if (repeat) { t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(...repeat); }
+  return t;
+}
+const grad = new THREE.DataTexture(new Uint8Array([90, 90, 90, 255, 170, 170, 170, 255, 255, 255, 255, 255]), 3, 1, THREE.RGBAFormat);
+grad.minFilter = grad.magFilter = THREE.NearestFilter; grad.needsUpdate = true;
+const toon = (color, o = {}) => new THREE.MeshToonMaterial(Object.assign({ color, gradientMap: grad }, o));
+const basic = (color, o = {}) => new THREE.MeshBasicMaterial(Object.assign({ color }, o));
+const outlineMat = basic(NIGHT, { side: THREE.BackSide });
+// Inverted-hull outline with the same thickness on every axis.
+function outline(mesh, t = .2) {
+  mesh.geometry.computeBoundingBox();
+  const s = new THREE.Vector3(); mesh.geometry.boundingBox.getSize(s);
+  const o = new THREE.Mesh(mesh.geometry, outlineMat);
+  o.scale.set(1 + 2 * t / Math.max(s.x, .01), 1 + 2 * t / Math.max(s.y, .01), 1 + 2 * t / Math.max(s.z, .01));
+  mesh.add(o); return mesh;
+}
+const add = (m, x = 0, y = 0, z = 0) => { m.position.set(x, y, z); scene.add(m); return m; };
+const hittable = [], paintables = [];
+function paintable(c) {
+  const base = document.createElement('canvas'); base.width = c.width; base.height = c.height; base.getContext('2d').drawImage(c, 0, 0);
+  const p = { c, g: c.getContext('2d'), base, tex: canvasTex(c), ppu: c.ppu };
+  paintables.push(p); return p;
+}
+
+// sky dome + pink sun behind Manhattan
+{
+  const c = document.createElement('canvas'); c.width = 4; c.height = 512; const g = c.getContext('2d');
+  const gr = g.createLinearGradient(0, 0, 0, 512);
+  [[0, '#0d0526'], [.36, '#2a0f4a'], [.46, '#7a2470'], [.5, '#ff4fa3'], [.53, '#3b145e'], [1, '#160b34']].forEach(([k, v]) => gr.addColorStop(k, v));
+  g.fillStyle = gr; g.fillRect(0, 0, 4, 512);
+  var sky = new THREE.Mesh(new THREE.SphereGeometry(700, 32, 16), basic('#fff', { map: canvasTex(c), side: THREE.BackSide, fog: false, depthWrite: false }));
+  sky.renderOrder = -2; scene.add(sky);
+  const s = document.createElement('canvas'); s.width = s.height = 256; const h = s.getContext('2d');
+  const sg = h.createLinearGradient(0, 0, 0, 256); sg.addColorStop(0, '#FFE45E'); sg.addColorStop(.55, '#FF4FA3'); sg.addColorStop(1, '#8A5CFF');
+  h.fillStyle = sg; h.beginPath(); h.arc(128, 128, 124, 0, 7); h.fill();
+  h.globalCompositeOperation = 'destination-out';
+  for (let i = 0; i < 7; i++) h.fillRect(0, 150 + i * 15, 256, 3 + i * 1.3);
+  const sun = add(new THREE.Mesh(new THREE.PlaneGeometry(110, 110), basic('#fff', { map: canvasTex(s), transparent: true, fog: false, depthWrite: false })), -120, 42, -340);
+  sun.lookAt(30, 20, 20);
+}
+
+scene.add(new THREE.HemisphereLight('#b9a8ff', '#3a1f4a', .7));
+scene.add(new THREE.AmbientLight('#ffffff', .55));
+const sunLight = new THREE.DirectionalLight('#ffffff', 1.6); sunLight.position.set(-30, 50, -20); scene.add(sunLight);
+
+// ---------------------------------------------------------------- ground, river, waterfront
+const cobble = document.createElement('canvas'); cobble.width = cobble.height = 256;
+{
+  const g = cobble.getContext('2d'); g.fillStyle = '#2a1f45'; g.fillRect(0, 0, 256, 256);
+  for (let y = 0; y < 256; y += 16) for (let x = (y / 16 % 2) * 12; x < 256; x += 24) { g.fillStyle = `hsl(262,22%,${22 + R() * 12}%)`; g.beginPath(); g.roundRect(x + 2, y + 2, 20, 12, 4); g.fill(); }
+}
+const ground = add(new THREE.Mesh(new THREE.PlaneGeometry(260, 110), toon('#fff', { map: canvasTex(cobble, [260 / 5, 110 / 5]) })), 0, 0, 49);
+ground.rotation.x = -Math.PI / 2; hittable.push(ground);
+
+// ink layer over the Brooklyn waterfront (world x -60..60, z -6..30)
+const GI = { x0: -60, z0: -6, w: 120, d: 36 };
+const inkC = document.createElement('canvas'); inkC.width = 2048; inkC.height = Math.round(2048 * GI.d / GI.w);
+const ictx = inkC.getContext('2d'), inkPPU = inkC.width / GI.w, inkTex = canvasTex(inkC);
+const inkPlane = add(new THREE.Mesh(new THREE.PlaneGeometry(GI.w, GI.d), basic('#fff', { map: inkTex, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2 })), 0, .04, GI.z0 + GI.d / 2);
+inkPlane.rotation.x = -Math.PI / 2;
+
+const lawnShape = new THREE.Shape();
+for (let i = 0; i <= 28; i++) { const a = i / 28 * Math.PI * 2, r = .88 + R() * .16; (i ? lawnShape.lineTo : lawnShape.moveTo).call(lawnShape, Math.cos(a) * 6.5 * r, Math.sin(a) * 5 * r); }
+const lawn = add(new THREE.Mesh(new THREE.ShapeGeometry(lawnShape), toon('#2fbf71')), 15.5, .015, 2);
+lawn.rotation.x = -Math.PI / 2; hittable.push(lawn);
+
+const water = document.createElement('canvas'); water.width = water.height = 256;
+{
+  const g = water.getContext('2d'); g.fillStyle = '#1d2a86'; g.fillRect(0, 0, 256, 256); g.lineCap = 'round';
+  for (let i = 0; i < 46; i++) { g.strokeStyle = R() < .75 ? 'rgba(94,230,208,.55)' : 'rgba(138,92,255,.7)'; g.lineWidth = 2 + R() * 3; const x = R() * 256, y = R() * 256, l = 10 + R() * 26; g.beginPath(); g.moveTo(x, y); g.quadraticCurveTo(x + l / 2, y - 5, x + l, y); g.stroke(); }
+}
+const waterTex = canvasTex(water, [60, 10]);
+const river = add(new THREE.Mesh(new THREE.PlaneGeometry(600, 82), basic('#fff', { map: waterTex })), 0, -.3, -46);
+river.rotation.x = -Math.PI / 2; hittable.push(river);
+
+add(outline(new THREE.Mesh(new THREE.BoxGeometry(260, 1.6, 1), toon('#4a3b6a')), .1), 0, -.5, -6.5);
+{
+  const posts = new THREE.InstancedMesh(new THREE.CylinderGeometry(.05, .05, 1.1, 6), toon(NIGHT), 81), m = new THREE.Matrix4();
+  for (let i = 0; i < 81; i++) posts.setMatrixAt(i, m.makeTranslation(-64 + i * 1.6, .55, -5.8));
+  scene.add(posts);
+  add(new THREE.Mesh(new THREE.BoxGeometry(128, .09, .09), basic('#5EE6D0')), 0, 1.12, -5.8);
+  const piles = new THREE.InstancedMesh(new THREE.CylinderGeometry(.28, .3, 3, 8), toon('#6b4f3a'), 40); let n = 0;
+  for (let x = -52; x < -24; x += 2.6) for (let z = -9; z > -17; z -= 2.6) if (R() < .75 && n < 40) piles.setMatrixAt(n++, m.makeTranslation(x + R() * .6, .2 + R() * .9, z));
+  piles.count = n; scene.add(piles);
+  [-52, -38, -24, 24, 38].forEach(x => {
+    add(new THREE.Mesh(new THREE.CylinderGeometry(.09, .12, 4.4, 8), toon(NIGHT)), x, 2.2, -4.6);
+    add(new THREE.Mesh(new THREE.SphereGeometry(.34, 14, 10), basic('#FFE45E')), x, 4.5, -4.6);
+  });
+}
+
+// ---------------------------------------------------------------- Brooklyn Bridge (x = 0, runs along z)
+const DECK_Y = 8;
+function cable(knots, sags) {
+  return z => {
+    for (let i = 0; i < knots.length - 1; i++) {
+      const [z0, y0] = knots[i], [z1, y1] = knots[i + 1];
+      if (z <= z0 && z >= z1) { const f = (z - z0) / (z1 - z0); return y0 + (y1 - y0) * f - sags[i] * 4 * f * (1 - f); }
+    }
+    return knots[0][1];
+  };
+}
+function tube(x, yAt, z0, z1, r, color) {
+  const pts = []; for (let z = z0; z >= z1; z -= 1) pts.push(new THREE.Vector3(x, yAt(z), z));
+  scene.add(new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), 220, r, 6), basic(color)));
+}
+function gothicTower() {
+  const W2 = 5.2, H = 26, s = new THREE.Shape(), holes = [];
+  s.moveTo(-W2, 0); s.lineTo(W2, 0); s.lineTo(W2, H); s.lineTo(-W2, H); s.closePath();
+  [-2.3, 2.3].forEach(cx => {
+    const hw = 1.35, y0 = 4.5, ys = 13, ya = 18.6, h = new THREE.Path();
+    h.moveTo(cx - hw, y0); h.lineTo(cx + hw, y0); h.lineTo(cx + hw, ys);
+    h.quadraticCurveTo(cx + hw, ys + (ya - ys) * .55, cx, ya); h.quadraticCurveTo(cx - hw, ys + (ya - ys) * .55, cx - hw, ys); h.closePath();
+    s.holes.push(h); holes.push(h);
+  });
+  const geo = new THREE.ExtrudeGeometry(s, { depth: 4, bevelEnabled: false }); geo.translate(0, 0, -2);
+  return { geo, holes };
+}
+const bbY = cable([[22, 9], [-12, 26.3], [-80, 26.3], [-112, 9]], [1.5, 15.5, 1.5]);
+const BB_X = [-3.4, -1.4, 1.4, 3.4];
+[-12, -80].forEach(tz => {
+  const { geo, holes } = gothicTower();
+  const t = add(outline(new THREE.Mesh(geo, toon('#cdbdf0')), .16), 0, 0, tz); hittable.push(t);
+  t.add(new THREE.LineSegments(new THREE.EdgesGeometry(geo, 25), new THREE.LineBasicMaterial({ color: NIGHT })));
+  holes.forEach(h => [-2.04, 2.04].forEach(z => {   // glowing arch outlines, the bridge's signature
+    const g = new THREE.BufferGeometry().setFromPoints(h.getPoints(20).map(p => new THREE.Vector3(p.x, p.y, z)));
+    t.add(new THREE.LineLoop(g, new THREE.LineBasicMaterial({ color: '#C6FF3D' })));
+  }));
+  add(outline(new THREE.Mesh(new THREE.BoxGeometry(11.6, 1.2, 4.8), toon('#9b88c9')), .1), 0, 26.6, tz);
+  add(outline(new THREE.Mesh(new THREE.BoxGeometry(12.4, 3, 6.4), toon('#7d6aa8')), .1), 0, -1.2, tz);
+});
+[-2.3, 2.3].forEach(x => {
+  add(outline(new THREE.Mesh(new THREE.BoxGeometry(2.6, .7, 132), toon('#2C2A7A')), .1), x, DECK_Y, -46);
+  [x - 1.3, x + 1.3].forEach(ex => add(new THREE.Mesh(new THREE.BoxGeometry(.09, .09, 132), basic('#C6FF3D')), ex, DECK_Y + .45, -46));
+});
+BB_X.forEach(x => tube(x, bbY, 22, -112, .13, '#C6FF3D'));
+{
+  const v = [];
+  BB_X.forEach(x => {
+    for (let z = 20; z > -111; z -= 1.5) {
+      if (Math.abs(z + 12) < 2.5 || Math.abs(z + 80) < 2.5) continue;
+      const y = bbY(z); if (y > DECK_Y + .8) v.push(x, y, z, x, DECK_Y + .35, z);
+    }
+    [-12, -80].forEach(tz => { for (let k = 1; k <= 8; k++) [-1, 1].forEach(sg => v.push(x, 24.5, tz + sg * 2, x, DECK_Y + .35, tz + sg * (2 + k * 2.4))); });
+  });
+  const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(v, 3));
+  scene.add(new THREE.LineSegments(g, new THREE.LineBasicMaterial({ color: '#5EE6D0', transparent: true, opacity: .75 })));
+}
+
+// ---------------------------------------------------------------- Manhattan Bridge (x = 55), simpler, blue steel
+{
+  const X = 55, mbY = cable([[20, 10.5], [-16, 31.5], [-76, 31.5], [-112, 10.5]], [1.5, 17, 1.5]);
+  [-16, -76].forEach(z => {
+    [-3.6, 3.6].forEach(dx => add(outline(new THREE.Mesh(new THREE.BoxGeometry(1.8, 33, 2.4), toon('#3A7BFF')), .12), X + dx, 15.5, z));
+    [31, 22].forEach(y => add(outline(new THREE.Mesh(new THREE.BoxGeometry(9, 1.2, 2.4), toon('#3A7BFF')), .1), X, y, z));
+  });
+  add(outline(new THREE.Mesh(new THREE.BoxGeometry(9, 1, 132), toon('#25366e')), .1), X, 9.5, -46);
+  [-2.6, 2.6].forEach(dx => tube(X + dx, mbY, 20, -112, .15, '#5EE6D0'));
+  add(outline(new THREE.Mesh(new THREE.BoxGeometry(12, 10, 10), toon('#4b3ba8')), .12), X, 5, 25);
+}
+
+// ---------------------------------------------------------------- DUMBO buildings
+function building(s) {
+  const p = paintable(paintWall(s.w, s.h, s));
+  const front = toon('#fff', { map: p.tex, emissive: '#fff', emissiveMap: p.tex, emissiveIntensity: .18 });
+  front.userData.paint = p;
+  const side = toon(s.tone), roof = toon('#1a0e33'), back = toon(shade(s.tone, -.35));
+  const m = add(outline(new THREE.Mesh(new THREE.BoxGeometry(s.w, s.h, s.d), [side, side, roof, roof, back, front]), .2), s.x, s.h / 2, s.z);
+  hittable.push(m);
+  add(outline(new THREE.Mesh(new THREE.BoxGeometry(s.w + .5, .5, s.d + .5), toon('#2a1550')), .08), s.x, s.h + .25, s.z);
+  return m;
+}
+function waterTower(x, y, z) {
+  const g = new THREE.Group(); g.position.set(x, y, z); scene.add(g);
+  [[-1, -1], [1, -1], [-1, 1], [1, 1]].forEach(([a, b]) => { const l = new THREE.Mesh(new THREE.CylinderGeometry(.09, .09, 2.4, 6), toon(NIGHT)); l.position.set(a, 1.2, b); g.add(l); });
+  const tank = outline(new THREE.Mesh(new THREE.CylinderGeometry(1.6, 1.6, 3, 18), toon('#FFB23F')), .1); tank.position.y = 3.9; g.add(tank);
+  const cone = outline(new THREE.Mesh(new THREE.ConeGeometry(1.8, 1.5, 18), toon('#5a2f22')), .08); cone.position.y = 6.15; g.add(cone);
+}
+[
+  { x: -15, z: 13, w: 12, d: 7, h: 9, tone: '#FF4FA3', piece: 'DUMBO', fill: ['#C6FF3D', '#5EE6D0'], fire: true },
+  { x: -29, z: 14, w: 13, d: 8, h: 12, tone: '#8A5CFF', brick: '#6e2a3c', piece: '718', font: 'Bungee', fill: ['#FF4FA3', '#FFB23F'], halo: '#C6FF3D' },
+  { x: -44, z: 13, w: 12, d: 7, h: 8, tone: '#19C2A6', brick: '#7a3040', piece: 'SQUAD', fill: ['#5EE6D0', '#8A5CFF'] },
+  { x: -58, z: 14, w: 12, d: 8, h: 11, tone: '#FFB23F', piece: 'BK', font: 'Bungee', fill: ['#C6FF3D', '#FF4FA3'], fire: true },
+  { x: 16, z: 15, w: 12, d: 8, h: 9, tone: '#3A7BFF', piece: 'REPS', fill: ['#FF4FA3', '#8A5CFF'], halo: '#FFE45E' },
+  { x: 30, z: 14, w: 12, d: 7, h: 13, tone: '#FF6B4A', piece: 'NO EXCUSES', font: 'Permanent Marker', fill: ['#C6FF3D', '#5EE6D0'], fire: true },
+  { x: 43, z: 15, w: 9, d: 8, h: 10, tone: '#8A5CFF', piece: 'GO!', fill: ['#FFE45E', '#FF4FA3'] },
+  { x: -22, z: 30, w: 14, d: 10, h: 18, tone: '#3A7BFF', top: 'BROOKLYN' },
+  { x: -44, z: 29, w: 12, d: 10, h: 15, tone: '#FF4FA3', top: 'KINGS CO.' },
+  { x: 20, z: 30, w: 12, d: 10, h: 16, tone: '#19C2A6', top: 'NYC' },
+  { x: -60, z: 30, w: 12, d: 10, h: 13, tone: '#FFB23F', top: 'BK' },
+].forEach(building);
+waterTower(23, 16.5, 31); waterTower(-25, 18.5, 31);
+
+// Brooklyn anchorage: the giant wall under the bridge gets the hero mural
+building({ x: 0, z: 25, w: 16, d: 12, h: 11, tone: '#9b88c9', brick: '#5a3a6e', mural: true, piece: 'STAND UP', fill: ['#C6FF3D', '#5EE6D0'], halo: '#FF4FA3', sub: 'right here · your gym' });
+add(outline(new THREE.Mesh(new THREE.BoxGeometry(16, 11, 12), toon('#9b88c9')), .12), 0, 5.5, -118);
+
+// DUMBO clock tower
+{
+  const x = 34, z = 44, h = 30;
+  building({ x, z, w: 9, d: 9, h, tone: '#8a3352' });
+  add(outline(new THREE.Mesh(new THREE.BoxGeometry(6, 7, 6), toon('#cdbdf0')), .12), x, h + 3.5, z);
+  const roof = add(outline(new THREE.Mesh(new THREE.ConeGeometry(4.6, 4, 4), toon('#2C2A7A')), .1), x, h + 9, z); roof.rotation.y = Math.PI / 4;
+  const face = add(new THREE.Mesh(new THREE.CircleGeometry(2.2, 32), basic('#FFF6D6')), x, h + 3.6, z - 3.02); face.rotation.y = Math.PI;
+  [[.12, 1.5, .4], [.12, 2, -1.1]].forEach(([w, l, r]) => { const hd = new THREE.Mesh(new THREE.BoxGeometry(w, l, .05), basic(NIGHT)); hd.geometry.translate(0, l / 2, 0); hd.position.set(x, h + 3.6, z - 3.06); hd.rotation.z = r; scene.add(hd); });
+}
+
+// ---------------------------------------------------------------- filler city + Manhattan skyline
+const winC = document.createElement('canvas'); winC.width = 64; winC.height = 128;
+{
+  const g = winC.getContext('2d'); g.fillStyle = '#a69be0'; g.fillRect(0, 0, 64, 128);
+  for (let y = 4; y < 128; y += 16) for (let x = 4; x < 64; x += 16) { g.fillStyle = R() < .28 ? '#FFE45E' : '#2a2550'; g.fillRect(x, y, 9, 10); }
+}
+const winTex = canvasTex(winC); winTex.wrapS = winTex.wrapT = THREE.RepeatWrapping;
+const winMats = {};
+const winMat = tone => winMats[tone] || (winMats[tone] = toon(tone, { map: winTex, emissive: '#fff', emissiveMap: winTex, emissiveIntensity: .5 }));
+function block(x, z, w, d, h, tone) {
+  const geo = new THREE.BoxGeometry(w, h, d), uv = geo.attributes.uv;
+  for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) * w / 5, uv.getY(i) * h / 10);
+  return add(outline(new THREE.Mesh(geo, winMat(tone)), .3), x, h / 2, z);
+}
+for (let i = 0; i < 46; i++) {
+  const x = -125 + R() * 250, z = 50 + R() * 40;
+  block(x, z, 8 + R() * 6, 8 + R() * 6, 8 + R() * 16, pick(['#5a2140', '#3a2f8f', '#2C2A7A', '#4b3ba8']));
+}
+[-74, -88, -102, -116, 70, 84, 98, 112].forEach(x => block(x, 14 + R() * 6, 11, 8, 9 + R() * 8, pick(['#5a2140', '#3a2f8f'])));
+add(new THREE.Mesh(new THREE.PlaneGeometry(320, 80), toon('#1b1340')), 0, 0, -126).rotation.x = -Math.PI / 2;
+add(outline(new THREE.Mesh(new THREE.BoxGeometry(320, 1.6, 1), toon('#4a3b6a')), .1), 0, -.5, -85.5);
+for (let i = 0; i < 70; i++) {
+  const x = -140 + R() * 280; if (Math.abs(x) < 8 || Math.abs(x - 55) < 7) continue;
+  const z = -94 - R() * 46, fidi = 28 * Math.exp(-Math.pow((x + 30) / 26, 2));
+  block(x, z, 5 + R() * 6, 5 + R() * 6, 8 + R() * 30 + fidi, pick(['#2C2A7A', '#3a2f8f', '#4b3ba8', '#25366e']));
+}
+{ // One World Trade, tapered with a lime spire
+  const t = add(outline(new THREE.Mesh(new THREE.CylinderGeometry(1.7, 4.6, 68, 4), toon('#6f7cff', { emissive: '#2E6BFF', emissiveIntensity: .25 })), .25), -38, 34, -114);
+  t.rotation.y = Math.PI / 4;
+  add(new THREE.Mesh(new THREE.CylinderGeometry(.12, .12, 18, 6), basic('#C6FF3D')), -38, 77, -114);
+}
+
+// ---------------------------------------------------------------- the spot + player
+const SPOT = new THREE.Vector3(15.5, 0, 2.5);
+const ring = add(new THREE.Mesh(new THREE.RingGeometry(1.4, 1.75, 48), basic('#C6FF3D', { transparent: true, opacity: .9 })), SPOT.x, .07, SPOT.z);
+ring.rotation.x = -Math.PI / 2;
+add(new THREE.Mesh(new THREE.CylinderGeometry(1.5, 1.5, 16, 24, 1, true), basic('#C6FF3D', { transparent: true, opacity: .12, depthWrite: false, side: THREE.DoubleSide, blending: THREE.AdditiveBlending })), SPOT.x, 8, SPOT.z);
+const player = add(new THREE.Group(), SPOT.x, 0, SPOT.z); player.rotation.y = Math.PI;
+const legs = new THREE.Group(), upper = new THREE.Group(); player.add(legs, upper);
+const part = (geo, color, parent, t, x, y, z) => { const m = outline(new THREE.Mesh(geo, toon(color)), t); m.position.set(x, y, z); parent.add(m); return m; };
+[-.2, .2].forEach(x => part(new THREE.CapsuleGeometry(.17, .75, 4, 10), '#8A5CFF', legs, .06, x, .55, 0));
+part(new THREE.CapsuleGeometry(.36, .8, 4, 12), '#C6FF3D', upper, .06, 0, 1.6, 0);
+part(new THREE.SphereGeometry(.3, 18, 14), '#F4B98F', upper, .05, 0, 2.42, 0);
+[-.48, .48].forEach(x => { const a = part(new THREE.CapsuleGeometry(.11, .6, 4, 8), '#F4B98F', upper, .05, x, 1.7, .3); a.rotation.x = Math.PI / 2.3; });
+
+// ---------------------------------------------------------------- ink: balls, splats, turf
+let turf = 0, inkIdx = 0;
+const balls = [], ripples = [], ballGeo = new THREE.SphereGeometry(.28, 12, 10);
+function addTurf(k) { turf = Math.min(100, turf + k); $('turf').textContent = Math.round(turf) + '%'; $('bar').style.width = turf + '%'; }
+function groundInk(x, z, size, color) {
+  if (x < GI.x0 || x > GI.x0 + GI.w || z < GI.z0 || z > GI.z0 + GI.d) return;
+  splat(ictx, (x - GI.x0) * inkPPU, (z - GI.z0) * inkPPU, size * inkPPU, color);
+  inkTex.needsUpdate = true; addTurf(1.2);
+}
+function ripple(p, color) {
+  const m = add(new THREE.Mesh(new THREE.RingGeometry(.3, .6, 32), basic(color, { transparent: true })), p.x, -.25, p.z);
+  m.rotation.x = -Math.PI / 2; ripples.push({ m, t: 0 });
+}
+function inkAt(hit, color, size) {
+  const mat = Array.isArray(hit.object.material) ? hit.object.material[hit.face.materialIndex] : hit.object.material;
+  const p = mat.userData.paint;
+  if (p && hit.uv) { splat(p.g, hit.uv.x * p.c.width, (1 - hit.uv.y) * p.c.height, size * p.ppu, color, { drips: true }); p.tex.needsUpdate = true; addTurf(2); }
+  else if (hit.object === ground || hit.object === lawn) groundInk(hit.point.x, hit.point.z, size, color);
+  else if (hit.object === river) ripple(hit.point, color);
+}
+function throwBall(from, to, color, onHit) {
+  const m = add(new THREE.Mesh(ballGeo, basic(color)), from.x, from.y, from.z);
+  const dist = from.distanceTo(to);
+  balls.push({ m, from: from.clone(), to: to.clone(), t: 0, dur: .22 + dist * .012, arc: Math.min(4, dist * .15), onHit });
+}
+const ray = new THREE.Raycaster(), down = new THREE.Vector3(0, -.8, 0);
+function throwAt(ndc, quiet) {
+  ray.setFromCamera(ndc, camera);
+  const hit = ray.intersectObjects(hittable, false)[0], color = INK[inkIdx++ % INK.length];
+  const from = camera.position.clone().addScaledVector(ray.ray.direction, 1.5).add(down);
+  const to = hit ? hit.point.clone() : camera.position.clone().addScaledVector(ray.ray.direction, 40);
+  if (!quiet) { sound(.9); buzz(25); }
+  throwBall(from, to, color, () => { if (hit) { inkAt(hit, color, .9 + Math.random() * .9); sound(quiet ? .25 : .6); } });
+}
+function volley(n, quiet) {
+  for (let i = 0; i < n; i++) setTimeout(() => throwAt(new THREE.Vector2((Math.random() - .5) * 1.4, -.2 + Math.random() * .7), quiet), i * 90);
+}
+function squatBurst() {
+  const from = new THREE.Vector3(SPOT.x, 2.2, SPOT.z);
+  for (let i = 0; i < 8; i++) {
+    const a = Math.random() * Math.PI * 2, r = 1.6 + Math.random() * 3.6, color = INK[inkIdx++ % INK.length];
+    const to = new THREE.Vector3(SPOT.x + Math.cos(a) * r, 0, SPOT.z + Math.sin(a) * r);
+    throwBall(from, to, color, () => groundInk(to.x, to.z, .7 + Math.random() * .6, color));
+  }
+  sound(.35);
+}
+function resetInk() {
+  paintables.forEach(p => { p.g.clearRect(0, 0, p.c.width, p.c.height); p.g.drawImage(p.base, 0, 0); p.tex.needsUpdate = true; });
+  ictx.clearRect(0, 0, inkC.width, inkC.height); inkTex.needsUpdate = true;
+  turf = 0; addTurf(0);
+}
+
+// ---------------------------------------------------------------- sound (no files)
+let ac;
+function sound(vol) {
+  try {
+    ac = ac || new (window.AudioContext || window.webkitAudioContext)();
+    if (ac.state !== 'running') return;
+    const t = ac.currentTime, n = ac.sampleRate * .2 | 0, buf = ac.createBuffer(1, n, ac.sampleRate), d = buf.getChannelData(0);
+    for (let i = 0; i < n; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / n, 3);
+    const src = ac.createBufferSource(), bp = ac.createBiquadFilter(), g = ac.createGain();
+    src.buffer = buf; bp.type = 'bandpass'; bp.frequency.value = 800; bp.Q.value = .8; g.gain.value = .5 * vol;
+    src.connect(bp).connect(g).connect(ac.destination); src.start(t);
+    const o = ac.createOscillator(), og = ac.createGain();
+    o.frequency.setValueAtTime(140, t); o.frequency.exponentialRampToValueAtTime(50, t + .18);
+    og.gain.setValueAtTime(.45 * vol, t); og.gain.exponentialRampToValueAtTime(.001, t + .2);
+    o.connect(og).connect(ac.destination); o.start(t); o.stop(t + .22);
+  } catch (e) {}
+}
+const buzz = ms => { try { navigator.vibrate && navigator.vibrate(ms); } catch (e) {} };
+const wakeAudio = () => { try { ac = ac || new (window.AudioContext || window.webkitAudioContext)(); ac.resume(); } catch (e) {} };
+
+// ---------------------------------------------------------------- the camera path ("the video")
+const SHOTS = [
+  { at: [40, 30, 30], look: [0, 10, -50], t: 'BROOKLYN<br><em>BRIDGE</em>', s: 'est. 1883 · still standing' },
+  { at: [28, 14, -20], look: [0, 12, -30], t: 'EAST<br><em>RIVER</em>', s: 'Manhattan is right there' },
+  { at: [14, 2.6, 1], look: [-2, 10, -22], t: 'UNDER THE<br><em>BRIDGE</em>', s: 'DUMBO · BK 11201' },
+  { at: [-12, 3.5, -5.4], look: [-14, 6, 20], t: 'DUMBO<br><em>WALLS</em>', s: 'every wall is a canvas' },
+  { at: [-34, 3.2, -5.4], look: [-34, 6, 20], t: 'STAND<br><em>UP.</em>', s: 'tap anywhere to throw ink' },
+  { at: [0, 3, -3], look: [0, 7, 20], t: 'RIGHT HERE.<br><em>YOUR GYM.</em>', s: 'every squat throws ink' },
+  { at: [16, 3.4, -6], look: [14, 1, 4], t: 'EXERCISE<br><em>EVERYWHERE.</em>', s: 'Just Standup · Brooklyn' },
+];
+const DUR = [4.5, 3.5, 3.5, 4, 4, 4.5, 5], TOTAL = DUR.reduce((a, b) => a + b, 0), N = SHOTS.length;
+const v3 = a => new THREE.Vector3(...a);
+const posPath = new THREE.CatmullRomCurve3(SHOTS.map(s => v3(s.at)), true, 'centripetal');
+const lookPath = new THREE.CatmullRomCurve3(SHOTS.map(s => v3(s.look)), true, 'centripetal');
+function camAt(T) {
+  let t = ((T % TOTAL) + TOTAL) % TOTAL, i = 0;
+  while (t > DUR[i] && i < N - 1) { t -= DUR[i]; i++; }
+  const f = Math.min(1, t / DUR[i]), u = (i + f) / N;
+  return { i, f, key: i + f, pos: posPath.getPoint(u), look: lookPath.getPoint(u) };
+}
+// auto ink so the recorded loop shows the game, not just a fly-through
+const EVENTS = [3.25, 3.5, 3.75, 4.3, 4.65];
+const SQUAT_FROM = 5.35, SQUAT_TO = 6.55;
+
+let shot = -1;
+function setCaption(i) {
+  $('capT').innerHTML = SHOTS[i].t; $('capS').textContent = SHOTS[i].s;
+  const c = $('cap'); c.classList.remove('swap'); void c.offsetWidth; c.classList.add('swap');
+}
+
+// ---------------------------------------------------------------- recording (one full loop → file)
+let rec = null, recOut = null;
+function drawHud2D(g, W, H) {
+  const u = W / 100, sk = a => Math.tan(a * Math.PI / 180);
+  g.save(); g.translate(5 * u, 6 * u); g.transform(1, 0, sk(-14), 1, 0, 0); g.rotate(-3 * Math.PI / 180);
+  g.font = `${4.4 * u}px Bungee, Impact`; g.textBaseline = 'middle';
+  const cw = g.measureText('JUST STANDUP').width + 4.8 * u;
+  g.fillStyle = NIGHT; g.fillRect(u, u, cw, 6.6 * u); g.fillStyle = '#FF4FA3'; g.fillRect(0, 0, cw, 6.6 * u);
+  g.fillStyle = NIGHT; g.fillText('JUST STANDUP', 2.4 * u, 3.6 * u);
+  g.restore();
+  g.save(); g.translate(W - 5 * u, 7 * u); g.textAlign = 'right'; g.textBaseline = 'alphabetic';
+  g.font = `${2.6 * u}px Bungee, Impact`; g.fillStyle = '#8FA39A'; g.fillText('TURF', -14 * u, 0);
+  g.font = `${8 * u}px "Rubik Wet Paint", Impact`; g.fillStyle = '#C6FF3D'; g.fillText(Math.round(turf) + '%', 0, 2 * u);
+  g.restore();
+  const s = SHOTS[Math.max(0, shot)], lines = s.t.replace(/<\/?em>/g, '').split('<br>');
+  g.save(); g.translate(5 * u, H - 16 * u); g.transform(1, 0, sk(-12), 1, 0, 0); g.rotate(-4 * Math.PI / 180);
+  g.font = `${13 * u}px "Rubik Wet Paint", Impact`;
+  lines.forEach((ln, i) => {
+    const y = -(lines.length - i) * 12.4 * u;
+    g.fillStyle = '#8A5CFF'; g.fillText(ln, 1.2 * u, y + 1.2 * u);
+    g.fillStyle = i === lines.length - 1 ? '#C6FF3D' : '#EDF3EF'; g.fillText(ln, 0, y);
+  });
+  g.font = `${4.2 * u}px "Permanent Marker", sans-serif`; g.fillStyle = '#5EE6D0'; g.fillText(s.s, 0, 2 * u);
+  g.restore();
+}
+function toggleRec() {
+  if (rec) { rec.stop(); return; }
+  const type = ['video/mp4;codecs=avc1', 'video/mp4', 'video/webm;codecs=vp9', 'video/webm'].find(t => window.MediaRecorder && MediaRecorder.isTypeSupported(t));
+  if (!type) { $('recTag').hidden = false; $('recTag').textContent = 'Recording not supported here'; setTimeout(() => $('recTag').hidden = true, 2500); return; }
+  const rc = document.createElement('canvas'); rc.width = cv.width; rc.height = cv.height;
+  recOut = { rc, g: rc.getContext('2d') };
+  const chunks = [];
+  rec = new MediaRecorder(rc.captureStream(30), { mimeType: type, videoBitsPerSecond: 10e6 });
+  rec.ondataavailable = e => e.data.size && chunks.push(e.data);
+  rec.onstop = () => {
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob(chunks, { type }));
+    a.download = 'brooklyn-ink.' + (type.includes('mp4') ? 'mp4' : 'webm'); a.click();
+    rec = recOut = null; $('recBtn').classList.remove('on'); $('recBtn').textContent = 'REC'; $('recTag').hidden = true;
+  };
+  T = 0; loopN = 0; prevKey = -1; resetInk(); paused = false; $('pauseBtn').textContent = '❚❚';
+  rec.start(250);
+  $('recBtn').classList.add('on'); $('recBtn').textContent = '■'; $('recTag').hidden = false;
+  setTimeout(() => rec && rec.stop(), TOTAL * 1000 + 300);
+}
+
+// ---------------------------------------------------------------- input
+cv.addEventListener('pointerdown', e => {
+  wakeAudio();
+  const r = cv.getBoundingClientRect();
+  throwAt(new THREE.Vector2((e.clientX - r.left) / r.width * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1));
+});
+let paused = false;
+$('inkBtn').onclick = () => { wakeAudio(); volley(6); };
+$('pauseBtn').onclick = () => { paused = !paused; $('pauseBtn').textContent = paused ? '▶' : '❚❚'; };
+$('recBtn').onclick = () => { wakeAudio(); toggleRec(); };
+addEventListener('keydown', e => {
+  if (e.code === 'Space') { e.preventDefault(); $('inkBtn').click(); }
+  if (e.key === 'p' || e.key === 'P') $('pauseBtn').click();
+  if (e.key === 'r' || e.key === 'R') $('recBtn').click();
+});
+
+function resize() {
+  const r = stage.getBoundingClientRect(); if (!r.width) return;
+  renderer.setSize(r.width, r.height, false);
+  camera.aspect = r.width / r.height; camera.fov = camera.aspect < .5 ? 68 : 62; camera.updateProjectionMatrix();
+}
+new ResizeObserver(resize).observe(stage); resize();
+
+// ---------------------------------------------------------------- loop
+const clock = new THREE.Clock();
+let T = 0, loopN = 0, prevKey = -1, sqT = 0, lastRep = 0, first = true;
+function tick() {
+  requestAnimationFrame(tick);
+  const dt = Math.min(.05, clock.getDelta());
+  if (!paused) T += dt;
+  const n = Math.floor(T / TOTAL);
+  if (n !== loopN) { loopN = n; prevKey = -1; resetInk(); }
+  const c = camAt(T);
+  camera.position.copy(c.pos); camera.lookAt(c.look);
+  if (c.i !== shot) { shot = c.i; setCaption(shot); }
+  if (!paused) {
+    EVENTS.forEach(k => { if (prevKey < k && c.key >= k) volley(3, true); });
+    prevKey = c.key;
+    sqT += dt;
+    const ph = (sqT % 1.4) / 1.4, k = Math.sin(ph * Math.PI);
+    upper.position.y = -.55 * k; legs.scale.y = 1 - .42 * k; upper.position.z = .15 * k;
+    const rep = Math.floor(sqT / 1.4);
+    if (rep !== lastRep) { lastRep = rep; if (c.key > SQUAT_FROM && c.key < SQUAT_TO) squatBurst(); }
+    waterTex.offset.x += dt * .01; waterTex.offset.y += dt * .025;
+  }
+  for (let i = balls.length - 1; i >= 0; i--) {
+    const b = balls[i]; b.t += dt / b.dur; const t = Math.min(1, b.t);
+    b.m.position.lerpVectors(b.from, b.to, t); b.m.position.y += b.arc * 4 * t * (1 - t);
+    if (b.t >= 1) { scene.remove(b.m); b.m.material.dispose(); balls.splice(i, 1); b.onHit(); }
+  }
+  for (let i = ripples.length - 1; i >= 0; i--) {
+    const r = ripples[i]; r.t += dt; r.m.scale.setScalar(1 + r.t * 8); r.m.material.opacity = Math.max(0, 1 - r.t / .8);
+    if (r.t > .8) { scene.remove(r.m); ripples.splice(i, 1); }
+  }
+  ring.scale.setScalar(1 + .07 * Math.sin(clock.elapsedTime * 4));
+  sky.position.copy(camera.position);
+  renderer.render(scene, camera);
+  if (recOut) { recOut.g.drawImage(cv, 0, 0); drawHud2D(recOut.g, recOut.rc.width, recOut.rc.height); }
+  if (first) { first = false; $('load').style.opacity = 0; setTimeout(() => $('load').hidden = true, 450); }
+}
+// ?embed hides this page's HUD so motion/play.html can sit on top and drive the ink
+const qs = new URLSearchParams(location.search);
+if (qs.has('embed')) document.querySelector('.hud').style.display = 'none';
+const ndc = (x, y) => new THREE.Vector2(x, y);
+window.ink = {
+  punch(kind) {   // straight → middle of the wall, uppercut → high on the wall
+    if (kind === 'upper') throwAt(ndc((Math.random() - .5) * .5, .35 + Math.random() * .25), true);
+    else throwAt(ndc((Math.random() - .5) * .6, -.1 + Math.random() * .25), true);
+  },
+  shot(swish) {   // a lob to the top of the wall; swish adds a burst around it
+    throwAt(ndc((Math.random() - .5) * .3, .55), true);
+    if (swish) setTimeout(() => volley(6, true), 250);
+  },
+  turf: () => turf,
+  reset: resetInk
+};
+// ?t=20 jumps to second 20 of the loop and holds there (for rehearsal / screenshots)
+const jump = parseFloat(qs.get('t'));
+if (jump >= 0) { T = jump; loopN = Math.floor(T / TOTAL); prevKey = camAt(T).key; $('pauseBtn').click(); }
+tick();
+</script>
+</body>
+</html>

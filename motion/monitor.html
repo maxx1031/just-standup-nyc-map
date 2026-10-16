@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Live Monitor</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bungee&family=Permanent+Marker&family=Rubik+Wet+Paint&family=JetBrains+Mono:wght@500;700&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet">
+<style>
+/* Laptop view: QR to join · what the player sees on the phone (mirrored) · developer signals from the same phone */
+:root{--bg:#0B0F0E;--panel:#141A18;--line:rgba(237,243,239,.10);--fg:#EDF3EF;--mute:#8FA39A;--lime:#C6FF3D;--pink:#FF4FA3;--red:#FF5A4E;color-scheme:dark}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--fg);font-family:"Space Grotesk",system-ui,sans-serif}
+body{display:flex;flex-direction:column;height:100vh;overflow:hidden}
+header{display:flex;align-items:center;gap:14px;padding:12px 20px;border-bottom:1px solid var(--line);flex:none}
+.brand{font:20px/1 "Bungee",Impact,sans-serif;color:#160616;background:var(--pink);padding:6px 10px 4px;transform:skewX(-12deg) rotate(-2deg)}
+select{font:inherit;color:inherit;background:var(--panel);border:1px solid var(--line);border-radius:10px;height:36px;padding:0 10px}
+.status{display:flex;align-items:center;gap:8px;font:700 12px "JetBrains Mono",monospace;color:var(--mute)}
+.status i{width:9px;height:9px;border-radius:5px;background:var(--red)}
+.status.on i{background:var(--lime);box-shadow:0 0 8px var(--lime)}
+.status.on{color:var(--fg)}
+.hint{margin-left:auto;font-size:13px;color:var(--mute)}
+main{flex:1;min-height:0;display:grid;grid-template-columns:minmax(220px,300px) auto 1fr;gap:20px;padding:16px 20px 20px}
+.join{display:flex;flex-direction:column;justify-content:center;gap:18px;min-height:0}
+.join h1{margin:0;font:400 clamp(40px,5vw,64px)/.95 "Rubik Wet Paint",Impact,sans-serif;color:var(--fg);transform:skewX(-10deg) rotate(-4deg);text-shadow:4px 4px 0 #8A5CFF}
+.join h1 em{font-style:normal;color:var(--lime)}
+.join h1 .gloves{display:block;margin-top:10px;font-size:.7em;letter-spacing:.08em;text-shadow:none}
+.qr{background:#fff;border-radius:20px;padding:14px;box-shadow:8px 8px 0 var(--pink);transform:rotate(-2deg)}
+.qr img{display:block;width:100%;height:auto;image-rendering:pixelated}
+.qr .none{color:#160616;font:600 14px/1.5 "Space Grotesk",sans-serif;padding:30px 10px;text-align:center}
+.join ol{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:6px;font:18px/1.3 "Permanent Marker",sans-serif;color:#5EE6D0}
+.join ol b{color:var(--lime);font-family:"Bungee",sans-serif;margin-right:8px}
+.join small{font:11px "JetBrains Mono",monospace;color:var(--mute);word-break:break-all}
+.col{display:flex;flex-direction:column;gap:8px;min-height:0}
+.col h2{margin:0;font:700 11px "JetBrains Mono",monospace;letter-spacing:.14em;color:var(--mute)}
+.phone{height:calc(100vh - 135px);aspect-ratio:9/16;border:0;border-radius:24px;background:#160b34;box-shadow:0 0 0 1px var(--line),0 20px 60px rgba(0,0,0,.5)}
+.dev{flex:1;width:100%;border:0;border-radius:18px;background:var(--bg);box-shadow:0 0 0 1px var(--line)}
+.empty{flex:1;display:grid;place-items:center;text-align:center;color:var(--mute);font-size:15px;line-height:1.6;padding:40px}
+</style>
+</head>
+<body>
+<header>
+  <div class="brand">LIVE MONITOR</div>
+  <label for="dev" class="status" style="color:var(--mute)">PHONE</label>
+  <select id="dev" aria-label="Phone to follow"></select>
+  <div class="status" id="status"><i></i><span id="statusTxt">waiting</span></div>
+  <div class="hint">Open the player page on the phone and tap START. Both sides follow it live.</div>
+</header>
+<main id="main">
+  <section class="join" aria-label="Join from your phone">
+    <h1>Scan me<br><em>and Try</em><span class="gloves" aria-hidden="true">🥊🥊🥊</span></h1>
+    <div class="qr"><img id="qr" alt="QR code: open the player page on your phone" hidden><div class="none" id="qrNone">Starting the public link…</div></div>
+    <ol><li><b>1</b>Scan with your camera</li><li><b>2</b>Tap START</li><li><b>3</b>Punch!</li></ol>
+    <small id="qrUrl"></small>
+  </section>
+  <div class="col"><h2>PLAYER VIEW · MIRRORED FROM THE PHONE</h2><iframe class="phone" id="left" title="Player view"></iframe></div>
+  <div class="col"><h2>DEVELOPER · LIVE SIGNALS FROM THE SAME PHONE</h2><iframe class="dev" id="right" title="Developer signals"></iframe></div>
+</main>
+
+<script>
+(() => {
+const $ = s => document.querySelector(s);
+let es = null, last = 0, frames = 0;
+// One live connection for the whole page; both panels subscribe here. (Chrome allows only 6 open
+// connections per site, so one stream per panel per tab starved the 3D wall of its downloads.)
+const listeners = new Set();
+window.MONITOR_BUS = { on: fn => listeners.add(fn) };
+
+function follow(id) {
+  history.replaceState(null, '', '?id=' + id);
+  listeners.clear();
+  $('#left').src = 'play.html?mirror=' + id;
+  $('#right').src = 'motion-lab.html?remote=' + id;
+  if (es) es.close();
+  es = new EventSource('/stream?id=' + encodeURIComponent(id));
+  es.onmessage = e => {
+    const m = JSON.parse(e.data); last = Date.now(); frames += (m.frames || []).length;
+    listeners.forEach(fn => { try { fn(m); } catch (err) { console.error(err); } });
+  };
+}
+// connection light: green while packets keep arriving
+let lastFrames = 0;
+setInterval(() => {
+  const age = Date.now() - last, on = last && age < 1500, hz = (frames - lastFrames); lastFrames = frames;
+  $('#status').classList.toggle('on', !!on);
+  $('#statusTxt').textContent = !last ? 'waiting for the phone' : on ? 'live · ' + hz + ' samples/s' : 'no data for ' + Math.round(age / 1000) + ' s';
+}, 1000);
+
+// QR for the public player link; re-check so a restarted tunnel (new address) updates it
+let qrFor = '';
+function loadQR() {
+  fetch('/public').then(r => r.json()).then(({ url }) => {
+    if (!url || url === qrFor) return;
+    qrFor = url; $('#qr').src = '/qr.svg?u=' + encodeURIComponent(url); $('#qr').hidden = false; $('#qrNone').hidden = true;
+    $('#qrUrl').textContent = url.replace('https://', '');
+  }).catch(() => {});
+}
+loadQR(); setInterval(loadQR, 10000);
+
+fetch('/devices').then(r => r.json()).then(list => {
+  const phones = list.filter(d => /iPhone|Android/.test(d.ua)).concat(list.filter(d => !/iPhone|Android/.test(d.ua)));
+  if (!phones.length) { $('#statusTxt').textContent = 'no phone yet · scan the QR'; setTimeout(() => location.reload(), 5000); return; }
+  $('#dev').innerHTML = phones.map(d => '<option value="' + d.id + '">' + d.name + ' · ' + d.id + (/MicroMessenger/.test(d.ua) ? ' (WeChat)' : /CriOS/.test(d.ua) ? ' (Chrome)' : '') + '</option>').join('');
+  const want = new URLSearchParams(location.search).get('id');
+  const pick = phones.find(d => d.id === want) || phones[0];
+  $('#dev').value = pick.id; follow(pick.id);
+  $('#dev').onchange = () => follow($('#dev').value);
+});
+})();
+</script>
+</body>
+</html>

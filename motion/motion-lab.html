@@ -1,0 +1,674 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+<title>Motion Lab</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Anton&family=JetBrains+Mono:wght@500;700&family=Space+Grotesk:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+/* Layout: one phone column. Live readout on top, scope in the middle, tuning at the bottom. */
+:root{
+  --bg:#0B0F0E; --panel:#141A18; --line:rgba(237,243,239,.10);
+  --fg:#EDF3EF; --mute:#8FA39A;
+  --lime:#C6FF3D; --pink:#FF4FA3; --cyan:#5EE6D0; --violet:#8A5CFF; --yellow:#FFE45E; --red:#FF5A4E;
+  --display:"Anton","Impact",sans-serif;
+  --body:"Space Grotesk",system-ui,sans-serif;
+  --mono:"JetBrains Mono",ui-monospace,monospace;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html,body{margin:0;background:var(--bg);color:var(--fg);font-family:var(--body);-webkit-tap-highlight-color:transparent}
+body{padding:max(14px,env(safe-area-inset-top)) max(16px,env(safe-area-inset-right)) max(24px,env(safe-area-inset-bottom)) max(16px,env(safe-area-inset-left));display:flex;flex-direction:column;gap:12px;max-width:520px;margin:0 auto}
+button{font:inherit;color:inherit;cursor:pointer;border:0;background:none}
+button:focus-visible,input:focus-visible{outline:2px solid var(--lime);outline-offset:2px}
+.top{display:flex;justify-content:space-between;align-items:center;gap:10px}
+.brand{font-family:var(--display);font-size:26px;letter-spacing:.02em;line-height:1;background:var(--lime);color:var(--bg);padding:6px 10px 5px;border-radius:6px;transform:skewX(-8deg)}
+.chip{font-family:var(--mono);font-size:11px;font-weight:700;letter-spacing:.08em;padding:6px 10px;border-radius:999px;background:var(--panel);border:1px solid var(--line);display:flex;align-items:center;gap:7px;color:var(--mute)}
+.chip i{width:7px;height:7px;border-radius:4px;background:var(--mute)}
+.chip.live{color:var(--fg)}.chip.live i{background:var(--lime);box-shadow:0 0 8px var(--lime)}
+.chip.rec i{background:var(--red);box-shadow:0 0 8px var(--red)}
+.tabs{display:grid;grid-template-columns:repeat(2,1fr);gap:4px;padding:4px;border-radius:14px;background:var(--panel);border:1px solid var(--line)}
+.tab{height:44px;border-radius:10px;font-weight:700;font-size:14px;color:var(--mute);display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1.1}
+.tab small{font-family:var(--mono);font-size:9px;letter-spacing:.1em;font-weight:700}
+.tab[aria-selected="true"]{background:var(--fg);color:var(--bg)}
+.targets{grid-template-columns:repeat(3,1fr)}
+.targets .tab{height:38px;font-size:13px}
+.hint{font-size:13px;color:var(--mute);line-height:1.45;margin:0}
+.hint b{color:var(--fg)}
+.hero{position:relative;border-radius:22px;background:var(--panel);border:1px solid var(--line);padding:16px;display:flex;flex-direction:column;gap:12px;overflow:hidden}
+.big{font-family:var(--display);font-size:clamp(44px,14vw,64px);line-height:.9;letter-spacing:.01em;transform:skewX(-6deg);color:var(--fg);min-height:58px}
+.sub{font-family:var(--mono);font-size:12px;color:var(--mute);letter-spacing:.04em;min-height:16px}
+.tiles{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.tile{border-radius:14px;background:rgba(255,255,255,.04);padding:10px;display:flex;flex-direction:column;gap:4px;min-width:0}
+.tile .k{font-family:var(--mono);font-size:9.5px;font-weight:700;letter-spacing:.1em;color:var(--mute)}
+.tile .v{font-family:var(--display);font-size:30px;line-height:1;font-variant-numeric:tabular-nums}
+.gauge{height:12px;border-radius:6px;background:rgba(255,255,255,.06);position:relative;overflow:hidden}
+.gauge b{position:absolute;left:0;top:0;bottom:0;width:0;background:var(--violet);border-radius:6px;transition:width .05s linear}
+.gauge s{position:absolute;top:-2px;bottom:-2px;width:2px;background:var(--fg)}
+.scale{display:flex;justify-content:space-between;font-family:var(--mono);font-size:10px;color:var(--mute)}
+.flash{position:absolute;inset:0;pointer-events:none;opacity:0;transition:opacity .35s ease-out}
+.scope{border-radius:18px;background:var(--panel);border:1px solid var(--line);padding:10px 10px 8px;display:flex;flex-direction:column;gap:6px}
+canvas{width:100%;height:170px;display:block}
+.legend{display:flex;flex-wrap:wrap;gap:12px;font-family:var(--mono);font-size:10px;color:var(--mute)}
+.legend span::before{content:"";display:inline-block;width:10px;height:3px;border-radius:2px;margin-right:5px;vertical-align:middle;background:currentColor}
+.ctl{display:flex;gap:8px}
+.btn{flex:1;height:52px;border-radius:14px;font-weight:700;font-size:15px;background:var(--panel);border:1px solid var(--line)}
+.btn.go{background:var(--lime);color:var(--bg);border:0;font-family:var(--display);font-size:22px;letter-spacing:.03em}
+.btn.rec{color:var(--red)}
+#teach[aria-pressed="true"]{background:var(--violet);color:var(--bg);border:0}
+.btn.rec[aria-pressed="true"]{background:var(--red);color:var(--bg)}
+.tune{border-radius:18px;background:var(--panel);border:1px solid var(--line);padding:14px;display:flex;flex-direction:column;gap:12px}
+.tune h2{margin:0;font-family:var(--mono);font-size:10px;letter-spacing:.12em;color:var(--mute);font-weight:700}
+.row{display:grid;grid-template-columns:1fr auto;gap:4px 10px;align-items:center}
+.row label{font-size:13px}
+.row output{font-family:var(--mono);font-size:12px;color:var(--lime);font-variant-numeric:tabular-nums}
+.row input{grid-column:1/-1;width:100%;accent-color:var(--lime)}
+.msg{border-radius:14px;padding:12px 14px;background:rgba(255,90,78,.12);border:1px solid rgba(255,90,78,.35);font-size:13px;line-height:1.45}
+.export{display:flex;gap:8px;align-items:center;font-size:13px}
+.export a,.export button{color:var(--lime);text-decoration:underline;font-weight:700}
+.notes{font-size:12.5px;color:var(--mute);line-height:1.55;margin:0;padding-left:18px}
+.notes b{color:var(--fg)}
+@media (prefers-reduced-motion:reduce){.flash,.gauge b{transition:none}}
+</style>
+</head>
+<body>
+<div class="top">
+  <div class="brand">MOTION LAB</div>
+  <div class="chip" id="chip"><i></i><span id="chipTxt">SENSOR OFF</span></div>
+</div>
+
+<div class="tabs" role="tablist">
+  <button class="tab" role="tab" data-mode="punch" aria-selected="true">Punch<small>DEV</small></button>
+  <button class="tab" role="tab" data-mode="shot" aria-selected="false">Shot<small>DEV</small></button>
+</div>
+
+<div class="tabs targets" data-for="punch" role="radiogroup" aria-label="Label for teaching and recording">
+  <button class="tab" data-target="" aria-selected="true">Any</button>
+  <button class="tab" data-target="straight" aria-selected="false">Straight</button>
+  <button class="tab" data-target="upper" aria-selected="false">Uppercut</button>
+</div>
+<div class="ctl" data-for="punch">
+  <button class="btn" id="teach" aria-pressed="false">Teach: off</button>
+  <button class="btn" id="forget">Clear teaching</button>
+  <button class="btn" id="buzz">Test buzz</button>
+</div>
+<p class="hint" id="tplInfo" data-for="punch"></p>
+
+<p class="hint" id="hint"></p>
+<div class="msg" id="msg" hidden></div>
+
+<section class="hero" aria-live="polite">
+  <div class="flash" id="flash"></div>
+  <div class="big" id="big">READY</div>
+  <div class="sub" id="sub">Tap START and allow motion sensors</div>
+
+  <div class="tiles" data-for="punch" style="grid-template-columns:repeat(2,1fr)">
+    <div class="tile"><span class="k">STRAIGHT</span><span class="v" id="cS" style="color:var(--lime)">0</span></div>
+    <div class="tile"><span class="k">UPPERCUT</span><span class="v" id="cU" style="color:var(--cyan)">0</span></div>
+  </div>
+
+  <div class="tiles" data-for="shot">
+    <div class="tile"><span class="k">SHOTS</span><span class="v" id="sN" style="color:var(--yellow)">0</span></div>
+    <div class="tile"><span class="k">JUMP SHOT</span><span class="v" id="sJ" style="color:var(--cyan)">0</span></div>
+    <div class="tile"><span class="k">SWISH</span><span class="v" id="sW" style="color:var(--lime)">0</span></div>
+  </div>
+
+  <div data-for="knees" style="display:flex;flex-direction:column;gap:8px">
+    <div class="gauge"><b id="kBar"></b><s id="kTh"></s></div>
+    <div class="scale"><span>0° standing</span><span>45°</span><span>90° thigh level</span></div>
+    <div class="tiles">
+      <div class="tile"><span class="k">REPS</span><span class="v" id="kReps">0</span></div>
+      <div class="tile"><span class="k">LAST MAX</span><span class="v" id="kMax">0°</span></div>
+      <div class="tile"><span class="k">STEPS/MIN</span><span class="v" id="kCad">0</span></div>
+    </div>
+    <button class="btn" id="calib">Stand still and tap to calibrate (1.5 s)</button>
+  </div>
+
+  <div class="tiles" data-for="jump">
+    <div class="tile"><span class="k">JUMPS</span><span class="v" id="jN">0</span></div>
+    <div class="tile"><span class="k">LAST cm</span><span class="v" id="jH">0</span></div>
+    <div class="tile"><span class="k">BEST</span><span class="v" id="jB">0</span></div>
+  </div>
+</section>
+
+<div class="ctl">
+  <button class="btn go" id="start">START</button>
+  <button class="btn" id="reset">Reset</button>
+  <button class="btn rec" id="rec" aria-pressed="false">● Record</button>
+</div>
+<div class="export" id="export" hidden></div>
+
+<section class="scope">
+  <canvas id="cv" aria-label="Live sensor plot"></canvas>
+  <div class="legend">
+    <span style="color:var(--lime)">linear accel g</span>
+    <span style="color:var(--cyan)">total g (incl. gravity)</span>
+    <span style="color:var(--pink)">rotation ÷500°/s</span>
+    <span style="color:var(--yellow)">threshold</span>
+  </div>
+</section>
+
+<section class="tune">
+  <h2>THRESHOLDS</h2>
+  <div class="row" data-for="punch"><label for="tP">Punch trigger: linear accel</label><output id="oP"></output><input id="tP" type="range" min="8" max="40" step="1" value="16"></div>
+  <div class="row" data-for="punch"><label for="tW">Swing: rotation (unused)</label><output id="oW"></output><input id="tW" type="range" min="100" max="900" step="20" value="300"></div>
+  <div class="row" data-for="shot"><label for="tU">Shot trigger: upward accel</label><output id="oU"></output><input id="tU" type="range" min="4" max="25" step="1" value="8"></div>
+  <div class="row" data-for="shot"><label for="tL">Swish: wrist flick speed</label><output id="oL"></output><input id="tL" type="range" min="200" max="1200" step="20" value="450"></div>
+  <div class="row" data-for="knees"><label for="tK">Knee up: thigh angle</label><output id="oK"></output><input id="tK" type="range" min="30" max="85" step="1" value="50"></div>
+  <div class="row" data-for="jump"><label for="tF">Airborne: total g below</label><output id="oF"></output><input id="tF" type="range" min="0.15" max="0.6" step="0.05" value="0.35"></div>
+</section>
+
+<ul class="notes" id="notes"></ul>
+
+<script src="core.js"></script>
+<script>
+(() => {
+const $ = s => document.querySelector(s);
+const G = 9.81;
+const dot = (a, b) => a[0]*b[0] + a[1]*b[1] + a[2]*b[2];
+const len = a => Math.hypot(a[0], a[1], a[2]);
+const norm = a => { const l = len(a) || 1; return [a[0]/l, a[1]/l, a[2]/l]; };
+
+const S = {
+  running: false, mode: 'punch', buf: [], got: 0, rateN: 0, rateT: 0, rate: 0,
+  rec: false, rows: [], gLP: null, lastWarn: 0, target: '', teach: false,
+  p: { pending: null, last: -1e9, n: { straight: 0, upper: 0 } },
+  k: { g0: null, calib: false, calibT0: 0, acc: [0,0,0], ang: 0, up: false, max: 0, reps: 0, times: [] },
+  j: { air: false, t0: 0, n: 0, best: 0 },
+  s: { pending: null, last: -1e9, n: 0, jump: 0, swish: 0 }
+};
+const TH = { punch: 16, swing: 300, knee: 50, ff: 0.35, up: 8, flick: 450 };
+
+const MODES = {
+  punch: {
+    hint: 'Phone in the punching hand. <b>Any grip works, but teach and play with the same grip.</b> Turn Teach on, pick a punch, throw it 3–5 times, then turn Teach off.',
+    notes: [
+      '<b>Straight</b>: punch forward. <b>Uppercut</b>: swing up from the waist.',
+      '<b>Taught</b>: each punch is matched to the nearest taught sample. The subtitle shows the distance to both; a bigger gap means easier to tell apart.',
+      '<b>Not taught</b>: an upward start counts as an uppercut, anything else as a straight.'
+    ]
+  },
+  shot: {
+    hint: 'Phone <b>in the shooting palm</b>, thumb locked (wear a strap, <b>do not let go</b>). Full shot: bend knees, push up, flick the wrist. Jump shots work too.',
+    notes: [
+      '<b>Dip</b>: the body sinks first, so vertical accel goes negative then positive. It is a small squat.',
+      '<b>Push</b>: legs and arm drive up together, giving an upward accel spike. This is the trigger.',
+      '<b>Flick</b>: the wrist snaps at release and the gyro jumps to hundreds of °/s. Just raising the arm has no flick.',
+      '<b>Jump shot</b>: if total g drops near 0 around release, you left the ground.',
+      'Clear dip plus a fast flick = SWISH. Subtitle: dip / push / flick speed / airtime. Every push counts as a shot.'
+    ]
+  },
+  knees: {
+    hint: 'Phone <b>upright in a front pocket</b>. Stand straight, tap Calibrate, then do high knees. Only the pocket leg is counted.',
+    notes: [
+      'The phone turns with the thigh, so the change in gravity direction is <b>the thigh angle</b>.',
+      'Standing is 0°, thigh level is 90°. Above the threshold and back below 20° counts one rep.',
+      'The same angle measures squat depth: thigh level is 90°.'
+    ]
+  },
+  jump: {
+    hint: '<b>Hold the phone at your chest with both hands</b> and jump in place. A pocket works too.',
+    notes: [
+      'The accelerometer measures support force, not gravity: standing reads 1g.',
+      '<b>In the air you are in free fall, so it reads close to 0g.</b> Landing spikes above 2g.',
+      'Airtime T gives jump height: h = g·T²/8.'
+    ]
+  }
+};
+
+/* ---------- UI ---------- */
+function setMode(m) {
+  S.mode = m;
+  document.querySelectorAll('.tab[data-mode]').forEach(t => t.setAttribute('aria-selected', t.dataset.mode === m));
+  document.querySelectorAll('[data-for]').forEach(el => el.hidden = el.dataset.for !== m);
+  $('#hint').innerHTML = MODES[m].hint;
+  $('#notes').innerHTML = MODES[m].notes.map(n => '<li>' + n + '</li>').join('');
+  $('#big').textContent = S.running ? 'GO' : 'READY';
+  $('#big').style.color = 'var(--fg)';
+  $('#sub').textContent = m === 'knees' && !S.k.g0 ? 'Calibrate first' : (S.running ? 'Sensors on' : 'Tap START and allow motion sensors');
+}
+document.querySelectorAll('.tab[data-mode]').forEach(t => t.onclick = () => setMode(t.dataset.mode));
+document.querySelectorAll('.tab[data-target]').forEach(t => t.onclick = () => {
+  S.target = t.dataset.target;
+  document.querySelectorAll('.tab[data-target]').forEach(b => b.setAttribute('aria-selected', b === t));
+});
+
+function bindRange(id, out, key, fmt) {
+  const el = $(id), o = $(out);
+  const upd = () => { TH[key] = +el.value; o.textContent = fmt(+el.value); if (key === 'knee') $('#kTh').style.left = (TH.knee / 90 * 100) + '%'; };
+  el.oninput = upd; upd();
+}
+bindRange('#tP', '#oP', 'punch', v => v + ' m/s² (' + (v / G).toFixed(1) + 'g)');
+bindRange('#tW', '#oW', 'swing', v => v + ' °/s');
+bindRange('#tK', '#oK', 'knee', v => v + '°');
+bindRange('#tU', '#oU', 'up', v => v + ' m/s² (' + (v / G).toFixed(1) + 'g)');
+bindRange('#tL', '#oL', 'flick', v => v + ' °/s');
+bindRange('#tF', '#oF', 'ff', v => v.toFixed(2) + ' g');
+
+function msg(t) { const m = $('#msg'); m.hidden = !t; m.textContent = t || ''; }
+
+/* ---------- feedback ---------- */
+let ac = null, noiseBuf = null;
+function initAudio() {
+  // iPhone 静音键打开时网页默认没声音；设成 playback 后照样出声（iOS 17+ Safari）
+  try { if (navigator.audioSession) navigator.audioSession.type = 'playback'; } catch (e) {}
+  try { ac = ac || new (window.AudioContext || window.webkitAudioContext)(); ac.resume(); } catch (e) {}
+}
+/* 打击音：一声“啪”（白噪声过带通）+ 一声往下掉的“咚”。freq 越高越脆；freq < 300 是打错的闷音 */
+function beep(freq) {
+  if (!ac) return;
+  const t = ac.currentTime, out = ac.createGain();
+  out.gain.value = 0.9; out.connect(ac.destination);
+  if (!noiseBuf) {
+    noiseBuf = ac.createBuffer(1, ac.sampleRate * 0.3, ac.sampleRate);
+    const d = noiseBuf.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+  }
+  const bad = freq < 300;
+  const n = ac.createBufferSource(), bp = ac.createBiquadFilter(), ng = ac.createGain();
+  n.buffer = noiseBuf; bp.type = 'bandpass'; bp.frequency.value = bad ? 400 : freq * 2.5; bp.Q.value = 0.8;
+  ng.gain.setValueAtTime(bad ? 0.3 : 1, t); ng.gain.exponentialRampToValueAtTime(0.001, t + (bad ? 0.08 : 0.14));
+  n.connect(bp).connect(ng).connect(out); n.start(t); n.stop(t + 0.3);
+  const o = ac.createOscillator(), og = ac.createGain();
+  o.type = bad ? 'square' : 'sine';
+  o.frequency.setValueAtTime(bad ? 140 : freq / 3, t); o.frequency.exponentialRampToValueAtTime(bad ? 90 : 45, t + 0.18);
+  og.gain.setValueAtTime(bad ? 0.25 : 0.9, t); og.gain.exponentialRampToValueAtTime(0.001, t + (bad ? 0.25 : 0.2));
+  o.connect(og).connect(out); o.start(t); o.stop(t + 0.3);
+}
+/* 声音库：全部现场合成，不用音频文件。名字就是听起来的样子 */
+function noise(t, out, { type = 'bandpass', f0 = 1000, f1 = f0, q = 0.8, vol = 1, dur = 0.15 }) {
+  const n = ac.createBufferSource(), fl = ac.createBiquadFilter(), g = ac.createGain();
+  n.buffer = noiseBuf; fl.type = type; fl.Q.value = q;
+  fl.frequency.setValueAtTime(f0, t); fl.frequency.exponentialRampToValueAtTime(f1, t + dur);
+  g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.001, t + dur);
+  n.connect(fl).connect(g).connect(out); n.start(t); n.stop(t + dur + 0.05);
+}
+function tone(t, out, { type = 'sine', f0 = 440, f1 = f0, vol = 0.8, dur = 0.2 }) {
+  const o = ac.createOscillator(), g = ac.createGain();
+  o.type = type; o.frequency.setValueAtTime(f0, t); o.frequency.exponentialRampToValueAtTime(f1, t + dur);
+  g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.001, t + dur);
+  o.connect(g).connect(out); o.start(t); o.stop(t + dur + 0.05);
+}
+// 欢呼：一阵带通噪声，先涨后落。speed 越大越短；pitch 越大越尖
+function cheer(t, o, speed, pitch) {
+  const n = ac.createBufferSource(), fl = ac.createBiquadFilter(), g = ac.createGain(), d = 1.1 / speed;
+  n.buffer = noiseBuf; n.loop = true; fl.type = 'bandpass'; fl.frequency.value = 1100 * pitch; fl.Q.value = 0.6;
+  g.gain.setValueAtTime(0.001, t); g.gain.exponentialRampToValueAtTime(0.9, t + 0.15 / speed); g.gain.exponentialRampToValueAtTime(0.001, t + d);
+  n.connect(fl).connect(g).connect(o); n.start(t); n.stop(t + d + 0.1);
+}
+const SFX = {
+  pa:   { zh: '啪', play: (t, o) => { noise(t, o, { f0: 2000, dur: 0.12 }); tone(t, o, { f0: 220, f1: 45, dur: 0.18 }); } },
+  dong: { zh: '咚', play: (t, o) => { tone(t, o, { f0: 160, f1: 38, vol: 1, dur: 0.35 }); noise(t, o, { f0: 3000, vol: 0.4, dur: 0.02 }); } },
+  pu:   { zh: '噗·墨团', play: (t, o) => { noise(t, o, { type: 'lowpass', f0: 1400, f1: 150, q: 2, vol: 1.2, dur: 0.28 }); tone(t, o, { f0: 110, f1: 40, vol: 0.7, dur: 0.22 }); } },
+  si:   { zh: '嘶·喷漆', play: (t, o) => { for (let i = 0; i < 3; i++) noise(t + i * 0.07, o, { type: 'highpass', f0: 5000, q: 0.5, vol: 0.7, dur: 0.09 }); } },
+  sou:  { zh: '嗖啪', play: (t, o) => { noise(t, o, { f0: 400, f1: 3500, q: 2, vol: 0.6, dur: 0.12 }); noise(t + 0.12, o, { f0: 1800, dur: 0.1 }); tone(t + 0.12, o, { f0: 200, f1: 50, dur: 0.15 }); } },
+  ding: { zh: '叮', play: (t, o) => { tone(t, o, { f0: 1320, vol: 0.5, dur: 0.45 }); tone(t, o, { f0: 2640, vol: 0.2, dur: 0.25 }); } },
+  bit:  { zh: '8-bit', play: (t, o) => { [523, 784, 1046].forEach((f, i) => tone(t + i * 0.05, o, { type: 'square', f0: f, vol: 0.25, dur: 0.06 })); } },
+  shua: { zh: '唰·进网', play: (t, o) => { noise(t, o, { type: 'highpass', f0: 7000, f1: 2500, q: 0.7, vol: 0.8, dur: 0.32 }); noise(t + 0.05, o, { f0: 3000, f1: 1500, vol: 0.4, dur: 0.25 }); } },
+  dang: { zh: '当·砸框', play: (t, o) => { [520, 1170, 1830].forEach((f, i) => tone(t, o, { type: 'triangle', f0: f, vol: 0.4 / (i + 1), dur: 0.6 })); noise(t, o, { f0: 2500, vol: 0.5, dur: 0.04 }); } },
+  hey:  { zh: '欢呼', play: (t, o) => cheer(t, o, 1, 1) },
+  hey2: { zh: '欢呼×2', play: (t, o) => cheer(t, o, 2, 2) },
+  buzz: { zh: '嗡（打错）', play: (t, o) => tone(t, o, { type: 'square', f0: 140, f1: 90, vol: 0.25, dur: 0.25 }) }
+};
+// 2026-10-16 选定：直拳 = 啪，勾拳 = 嗖啪，投篮 = 欢呼两倍速
+const SND = { straight: 'pa', upper: 'sou', shot: 'hey2', swish: 'hey2' };
+function play(name) {
+  if (!ac || !SFX[name]) return;
+  if (!noiseBuf) {
+    noiseBuf = ac.createBuffer(1, ac.sampleRate * 0.5, ac.sampleRate);
+    const d = noiseBuf.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+  }
+  const out = ac.createGain(); out.gain.value = 0.9; out.connect(ac.destination);
+  SFX[name].play(ac.currentTime, out);
+}
+
+function fire(label, color, sub, freq, vib) {
+  $('#big').textContent = label; $('#big').style.color = color; $('#sub').textContent = sub;
+  const f = $('#flash'); f.style.transition = 'none'; f.style.background = color; f.style.opacity = '.28';
+  requestAnimationFrame(() => { f.style.transition = ''; f.style.opacity = '0'; });
+  typeof freq === 'string' ? play(freq) : beep(freq);
+  haptic(vib);
+}
+
+/* 震动：安卓用 navigator.vibrate（能设节奏）；iPhone 没有这个接口，
+   用 iOS 18+ 的 switch 复选框技巧触发一下系统触感，强弱不能调，节奏靠连点几次模拟 */
+let hapLabel = null;
+function iosTap() {
+  if (!hapLabel) {
+    hapLabel = document.createElement('label'); hapLabel.setAttribute('aria-hidden', 'true'); hapLabel.style.display = 'none';
+    const inp = document.createElement('input'); inp.type = 'checkbox'; inp.setAttribute('switch', '');
+    hapLabel.appendChild(inp); document.body.appendChild(hapLabel);
+  }
+  hapLabel.click();
+}
+function haptic(vib) {
+  if (!vib) return;
+  try {
+    if (navigator.vibrate) { navigator.vibrate(vib); return; }
+    const pat = Array.isArray(vib) ? vib : [vib];
+    let t = 0;
+    pat.forEach((d, i) => { if (i % 2 === 0) setTimeout(iosTap, t); t += d + (i % 2 === 0 ? 40 : 0); });
+  } catch (e) {}
+}
+
+/* ---------- detectors ---------- */
+/* 教学：每种拳先打几下当样本，之后出拳找最像的那种（最近邻）。
+   样本存在手机自己的坐标系里，所以教学和实战要用同一种握法。 */
+const ZH = { straight: 'Straight', upper: 'Uppercut' };
+let TPL = { straight: [], upper: [] };
+try { const o = JSON.parse(localStorage.getItem('punchTpl')) || {}; TPL = { straight: o.straight || [], upper: o.upper || [] }; } catch (e) {}
+function saveTpl() { try { localStorage.setItem('punchTpl', JSON.stringify(TPL)); } catch (e) {} }
+const taught = () => Object.values(TPL).every(v => v.length >= 2);
+function tplUI() {
+  $('#tplInfo').textContent = 'Taught: straight ' + TPL.straight.length + ' · uppercut ' + TPL.upper.length +
+    (taught() ? '  → matching taught samples' : '  → teach at least 2 of each; using the rough default rule for now');
+}
+
+function punchStep(s) {
+  const P = S.p;
+  if (!P.pending) {
+    // 起手后 650ms 内不再触发：收手那一下也会冲过阈值，不能算第二拳
+    if (s.la > TH.punch && s.t - P.last > 650) P.pending = { t0: s.t, peak: s.la, on: norm(s.a) };
+    return;
+  }
+  if (s.la > P.pending.peak) P.pending.peak = s.la;
+  if (s.t - P.pending.t0 < 200) return;
+  const { t0, peak, on } = P.pending; P.pending = null; P.last = t0;
+  // 特征：起手那一刻往哪冲（3）+ 起手前后手机一共转了多少度（3）+ 往上还是往下冲（1）
+  const rot = [0, 0, 0]; let prev = null;
+  for (const q of S.buf) {
+    if (q.t < t0 - 150 || q.t > s.t) continue;
+    if (prev != null) for (let i = 0; i < 3; i++) rot[i] += q.w[i] * (q.t - prev) / 1000;
+    prev = q.t;
+  }
+  const f = [...on, ...rot.map(v => v / 180), -dot(on, norm(s.g))];
+  if (S.teach) {
+    if (!S.target) { fire('PICK ONE', 'var(--mute)', 'In Teach mode, pick Straight or Uppercut above first', 180, 0); return; }
+    TPL[S.target].push(f.map(v => +v.toFixed(3)));
+    if (TPL[S.target].length > 8) TPL[S.target].shift();
+    saveTpl(); tplUI();
+    fire('LEARNED', 'var(--violet)', ZH[S.target] + ' sample #' + TPL[S.target].length + ' · ' + (peak / G).toFixed(1) + 'g', 520, 30);
+    return;
+  }
+  let kind, sub;
+  if (taught()) {
+    const d = {};
+    for (const k in TPL) d[k] = Math.min(...TPL[k].map(x => Math.hypot(...x.map((v, i) => v - f[i]))));
+    const ks = Object.keys(d).sort((a, b) => d[a] - d[b]);
+    kind = ks[0];
+    sub = (peak / G).toFixed(1) + 'g · nearest ' + ZH[ks[0]] + ' ' + d[ks[0]].toFixed(2) + ' · next ' + ZH[ks[1]] + ' ' + d[ks[1]].toFixed(2);
+  } else {
+    // 没教过：往上冲就是勾拳，否则直拳（f[6] 越负越往上：重力读数在 iOS 和安卓上都朝上）
+    kind = f[6] < -0.4 ? 'upper' : 'straight';
+    sub = (peak / G).toFixed(1) + 'g · up ' + (-f[6]).toFixed(2) + ' · default rule';
+  }
+  P.n[kind]++;
+  $('#cS').textContent = P.n.straight; $('#cU').textContent = P.n.upper;
+  if (kind === 'straight') fire('STRAIGHT', 'var(--lime)', sub, SND.straight, 25);
+  else fire('UPPER ↑', 'var(--cyan)', sub, SND.upper, [20, 30, 40]);
+}
+
+function shotStep(s) {
+  const T = S.s;
+  if (!T.pending) {
+    if (s.v > TH.up && s.t - T.last > 1000) T.pending = { t0: s.t };
+    return;
+  }
+  if (s.t - T.pending.t0 < 700) return;
+  const t0 = T.pending.t0; T.pending = null; T.last = s.t;
+  let dip = 0, up = 0, flick = 0, airStart = null, air = 0;
+  for (const q of S.buf) {
+    if (q.t < t0 - 600) continue;
+    if (q.t <= t0) dip = Math.min(dip, q.v);
+    if (q.t >= t0 - 100 && q.t <= t0 + 450) { up = Math.max(up, q.v); flick = Math.max(flick, q.wm); }
+    if (q.agm < TH.ff) { if (airStart == null) airStart = q.t; air = Math.max(air, q.t - airStart); } else airStart = null;
+  }
+  const sub = 'dip ' + dip.toFixed(1) + ' · push ' + up.toFixed(1) + ' m/s² · flick ' + Math.round(flick) + '°/s · air ' + Math.round(air) + 'ms';
+  // 没有对错：只要有上推就算一次投篮，压腕只决定是不是 SWISH
+  const jump = air > 80, swish = dip < -3 && flick > TH.flick * 1.4;
+  T.n++; if (jump) T.jump++; if (swish) T.swish++;
+  $('#sN').textContent = T.n; $('#sJ').textContent = T.jump; $('#sW').textContent = T.swish;
+  if (swish) fire('SWISH!', 'var(--lime)', sub, SND.swish, [30, 40, 60]);
+  else fire(jump ? 'JUMP SHOT' : 'SHOT', jump ? 'var(--cyan)' : 'var(--yellow)', sub, SND.shot, 40);
+}
+
+function kneeStep(s) {
+  const K = S.k, gh = norm(s.g);
+  if (K.calib) {
+    K.acc = [K.acc[0] + gh[0], K.acc[1] + gh[1], K.acc[2] + gh[2]];
+    const left = Math.max(0, 1500 - (s.t - K.calibT0));
+    $('#sub').textContent = 'Calibrating, stand still… ' + (left / 1000).toFixed(1) + 's';
+    if (left === 0) { K.g0 = norm(K.acc); K.calib = false; fire('CALIBRATED', 'var(--violet)', 'Start high knees', 520, 40); }
+    return;
+  }
+  if (!K.g0) return;
+  const ang = Math.acos(Math.max(-1, Math.min(1, dot(gh, K.g0)))) * 180 / Math.PI;
+  K.ang = K.ang * 0.6 + ang * 0.4;
+  $('#kBar').style.width = Math.min(100, K.ang / 90 * 100) + '%';
+  if (!K.up) { if (K.ang > TH.knee) { K.up = true; K.max = K.ang; } }
+  else {
+    K.max = Math.max(K.max, K.ang);
+    if (K.ang < 20) {
+      K.up = false; K.reps++; K.times.push(s.t);
+      K.times = K.times.filter(t => s.t - t < 10000);
+      const cad = K.times.length > 1 ? Math.round((K.times.length - 1) / ((s.t - K.times[0]) / 60000) * 2) : 0;
+      $('#kReps').textContent = K.reps; $('#kMax').textContent = Math.round(K.max) + '°'; $('#kCad').textContent = cad;
+      const high = K.max >= 75;
+      fire(high ? 'HIGH KNEE' : 'KNEE', high ? 'var(--violet)' : 'var(--fg)', 'max ' + Math.round(K.max) + '°', high ? 784 : 587, high ? 40 : 20);
+    }
+  }
+}
+
+function jumpStep(s) {
+  const J = S.j, m = s.agm;
+  if (!J.air) { if (m < TH.ff) { J.air = true; J.t0 = s.t; } return; }
+  if (m > 1.25) {
+    J.air = false;
+    const T = (s.t - J.t0) / 1000;
+    if (T > 0.08 && T < 1.2) {
+      const h = G * T * T / 8 * 100;
+      J.n++; J.best = Math.max(J.best, h);
+      $('#jN').textContent = J.n; $('#jH').textContent = Math.round(h); $('#jB').textContent = Math.round(J.best);
+      fire('JUMP!', 'var(--yellow)', 'air ' + Math.round(T * 1000) + ' ms · ~' + Math.round(h) + ' cm · landing ' + m.toFixed(1) + 'g', 440 + h * 12, 60);
+    }
+  } else if (s.t - J.t0 > 1500) J.air = false;
+}
+
+/* ---------- sample pipeline ---------- */
+function process(raw) {
+  const t = raw.t;
+  let ag = raw.ag, a = raw.a, g;
+  if (a) g = [ag[0] - a[0], ag[1] - a[1], ag[2] - a[2]];
+  else {
+    S.gLP = S.gLP ? S.gLP.map((v, i) => v + (ag[i] - v) * 0.08) : ag.slice();
+    g = S.gLP; a = [ag[0] - g[0], ag[1] - g[1], ag[2] - g[2]];
+  }
+  const s = { t, a, ag, g, w: raw.w, la: len(a), agm: len(ag) / G, wm: len(raw.w), v: dot(a, norm(g)) };
+  S.buf.push(s);
+  while (S.buf.length && t - S.buf[0].t > 4500) S.buf.shift();
+  S.got++; S.rateN++;
+  if (t - S.rateT > 1000) { S.rate = Math.round(S.rateN * 1000 / (t - S.rateT)); S.rateN = 0; S.rateT = t; chip(); }
+  if (S.rec) S.rows.push([Math.round(t), ...a.map(v => v.toFixed(3)), ...ag.map(v => v.toFixed(3)), ...raw.w.map(v => v.toFixed(2)), S.mode].join(','));
+  if (S.remote) return;   // remote: the phone already classified this; we only draw
+  if (S.mode === 'punch') punchStep(s);
+  else if (S.mode === 'shot') shotStep(s);
+  else if (S.mode === 'knees') kneeStep(s);
+  else jumpStep(s);
+}
+
+function onMotion(e) {
+  const A = e.acceleration, AG = e.accelerationIncludingGravity, R = e.rotationRate;
+  if (!AG || AG.x == null) return;
+  process({
+    t: performance.now(),
+    a: A && A.x != null ? [A.x, A.y, A.z] : null,
+    ag: [AG.x, AG.y, AG.z],
+    w: R && R.beta != null ? [R.beta, R.gamma, R.alpha] : [0, 0, 0]
+  });
+}
+
+function chip() {
+  const c = $('#chip');
+  c.classList.toggle('live', S.running);
+  c.classList.toggle('rec', S.rec);
+  $('#chipTxt').textContent = !S.running ? 'SENSOR OFF' : (S.rec ? 'REC · ' : S.remote ? 'PHONE · ' : 'LIVE · ') + S.rate + ' Hz';
+}
+
+/* ---------- start / controls ---------- */
+$('#start').onclick = async () => {
+  msg('');
+  initAudio();
+  if (typeof DeviceMotionEvent === 'undefined') { msg('This browser has no motion sensors. Open the link on your phone in Safari or Chrome.'); return; }
+  if (!window.isSecureContext) msg('Not an https link, so iPhone will block the sensors. Open the https link.');
+  if (typeof DeviceMotionEvent.requestPermission === 'function') {
+    try {
+      const r = await DeviceMotionEvent.requestPermission();
+      if (r !== 'granted') { msg('Motion access denied. iPhone: Settings → Safari → Advanced → Website Data, delete this site, reload, tap START and Allow.'); return; }
+    } catch (err) { msg('Permission request failed: ' + err.message); return; }
+  }
+  if (!S.running) window.addEventListener('devicemotion', onMotion);
+  S.running = true; S.rateT = performance.now(); chip();
+  $('#start').textContent = 'RUNNING'; $('#start').disabled = true;
+  haptic(40);
+  setMode(S.mode);
+  try { navigator.wakeLock && navigator.wakeLock.request('screen').catch(() => {}); } catch (e) {}
+  const before = S.got;
+  setTimeout(() => { if (S.got === before) msg('No sensor data after 2 s. Make sure this is a phone and the link is https.'); }, 2000);
+};
+
+$('#reset').onclick = () => {
+  S.p.n = { straight: 0, upper: 0 };
+  Object.assign(S.k, { reps: 0, times: [], up: false, max: 0 });
+  Object.assign(S.j, { n: 0, best: 0, air: false });
+  Object.assign(S.s, { n: 0, jump: 0, swish: 0, pending: null });
+  ['#sN', '#sJ', '#sW', '#cS', '#cU', '#kReps', '#kCad', '#jN', '#jH', '#jB'].forEach(id => $(id).textContent = '0');
+  $('#kMax').textContent = '0°';
+  setMode(S.mode);
+};
+
+$('#teach').onclick = () => {
+  S.teach = !S.teach; $('#teach').setAttribute('aria-pressed', S.teach);
+  $('#teach').textContent = S.teach ? 'Teach: on' : 'Teach: off';
+  msg(S.teach && !S.target ? 'Pick Straight or Uppercut above, then punch.' : '');
+};
+$('#forget').onclick = () => { TPL = { straight: [], upper: [] }; saveTpl(); tplUI(); };
+// 在点击里直接触发，最容易被 iPhone 放行；用来确认这台手机能不能震
+// 依次演示三种拳的震动和声音；没点 START 也能试
+$('#buzz').onclick = () => {
+  initAudio();
+  const how = navigator.vibrate ? 'Android vibration' : 'iPhone system tick (nothing felt = this phone cannot vibrate from the web)';
+  const demo = [['STRAIGHT', 'var(--lime)', SND.straight, 25], ['UPPER ↑', 'var(--cyan)', SND.upper, [20, 30, 40]]];
+  if (!navigator.vibrate) iosTap();
+  demo.forEach(([l, c, f, v], i) => setTimeout(() => fire(l, c, 'test ' + (i + 1) + '/2 · ' + how, f, v), i * 650));
+};
+
+$('#calib').onclick = () => {
+  if (!S.running) { msg('Tap START first.'); return; }
+  Object.assign(S.k, { calib: true, calibT0: performance.now(), acc: [0, 0, 0], g0: null, up: false });
+};
+
+$('#rec').onclick = () => {
+  S.rec = !S.rec; $('#rec').setAttribute('aria-pressed', S.rec);
+  $('#rec').textContent = S.rec ? '■ Stop' : '● Record';
+  chip();
+  if (S.rec) { S.rows = []; $('#export').hidden = true; return; }
+  const csv = 't_ms,ax,ay,az,agx,agy,agz,wx,wy,wz,mode\n' + S.rows.join('\n');
+  const name = 'motion-' + S.mode + (S.mode === 'punch' && S.target ? '-' + S.target : '') + '-' + new Date().toISOString().slice(11, 19).replace(/:/g, '') + '.csv';
+  const file = new File([csv], name, { type: 'text/csv' });
+  const ex = $('#export'); ex.hidden = false; ex.innerHTML = '';
+  const info = document.createElement('span'); info.textContent = S.rows.length + ' rows · uploading to laptop… · ';
+  ex.appendChild(info);
+  // 由 server.js 打开时，自动把 CSV 存到电脑的 motion/csv/；失败就用下面的分享/下载
+  fetch('/csv?name=' + encodeURIComponent(name), { method: 'POST', body: csv })
+    .then(r => r.json()).then(j => { info.textContent = S.rows.length + ' rows · ✓ saved on laptop (#' + j.n + ') · '; })
+    .catch(() => { info.textContent = S.rows.length + ' rows · upload failed, save manually → '; });
+  if (navigator.canShare && navigator.canShare({ files: [file] })) {
+    const b = document.createElement('button'); b.textContent = 'Share / save CSV';
+    b.onclick = () => navigator.share({ files: [file], title: name }).catch(() => {});
+    ex.appendChild(b);
+  } else {
+    const a = document.createElement('a'); a.href = URL.createObjectURL(file); a.download = name; a.textContent = 'Download ' + name;
+    ex.appendChild(a);
+  }
+};
+
+/* ---------- scope ---------- */
+const cv = $('#cv'), cx = cv.getContext('2d');
+function draw() {
+  const dpr = window.devicePixelRatio || 1, W = cv.clientWidth, H = cv.clientHeight;
+  if (cv.width !== W * dpr) { cv.width = W * dpr; cv.height = H * dpr; }
+  cx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  cx.clearRect(0, 0, W, H);
+  const top = 4, maxY = 4, y = v => H - 14 - Math.min(v, maxY) / maxY * (H - 14 - top);
+  cx.font = '10px "JetBrains Mono", monospace'; cx.fillStyle = '#8FA39A';
+  for (let v = 0; v <= maxY; v++) {
+    cx.strokeStyle = 'rgba(237,243,239,.07)'; cx.beginPath(); cx.moveTo(26, y(v)); cx.lineTo(W, y(v)); cx.stroke();
+    cx.fillText(v + 'g', 0, y(v) + 3);
+  }
+  cx.fillText('-4s', 26, H - 2); cx.fillText('now', W - 22, H - 2);
+  const thr = S.mode === 'punch' ? TH.punch / G : S.mode === 'shot' ? TH.up / G : S.mode === 'jump' ? TH.ff : null;
+  if (thr != null) {
+    cx.strokeStyle = '#FFE45E'; cx.setLineDash([4, 4]); cx.beginPath(); cx.moveTo(26, y(thr)); cx.lineTo(W, y(thr)); cx.stroke(); cx.setLineDash([]);
+  }
+  const b = S.buf;
+  if (!b.length) {
+    cx.fillStyle = '#8FA39A'; cx.font = '13px "Space Grotesk", sans-serif';
+    cx.fillText('Live sensor plot appears after START', 40, H / 2);
+  } else {
+    const now = b[b.length - 1].t, x = t => 26 + (1 - (now - t) / 4000) * (W - 26);
+    const line = (col, f) => { cx.strokeStyle = col; cx.lineWidth = 1.6; cx.beginPath(); b.forEach((s, i) => { const X = x(s.t); if (X < 26) return; i ? cx.lineTo(X, y(f(s))) : cx.moveTo(X, y(f(s))); }); cx.stroke(); };
+    line('#FF4FA3', s => s.wm / 500);
+    line('#5EE6D0', s => s.agm);
+    line('#C6FF3D', s => s.la / G);
+  }
+  requestAnimationFrame(draw);
+}
+
+/* test hook: feed synthetic samples {t, a|null, ag, w} */
+window.__lab = { process, setMode, S, TH, start() { S.running = true; chip(); } };
+
+/* ?remote=ID: no sensors on this machine. Draw the phone's live samples and show what the
+   phone decided (used as the right half of monitor.html on the laptop). */
+function startRemote(id) {
+  S.remote = true; S.running = true; S.rateT = 0; chip();
+  ['#start', '#tplInfo', '.targets', '.tune'].forEach(q => { const el = $(q); if (el) el.style.display = 'none'; });
+  $('#teach').parentElement.style.display = 'none';
+  document.documentElement.style.overflowAnchor = 'none'; scrollTo(0, 0);   // keep the top in view as text above changes
+  $('#sub').textContent = 'Waiting for phone ' + id + '…';
+  const r2 = n => n == null ? '–' : n.toFixed(2);
+  const bus = parent !== window && parent.MONITOR_BUS;   // inside monitor.html: share its single stream
+  const handle = msg => {
+    (msg.frames || []).forEach(f => process({ t: f[0], a: f.slice(1, 4), ag: f.slice(4, 7), w: f.slice(7, 10) }));
+    (msg.events || []).forEach(ev => {
+      if (ev.type === 'state') {
+        if ((ev.mode === 'punch' || ev.mode === 'shot') && ev.mode !== S.mode) setMode(ev.mode);
+        $('#hint').innerHTML = '<b>Phone ' + id + '</b> · ' + ev.phase + ' · ' + String(ev.t || '').replace(/<[^>]+>/g, ' ');
+      } else if (ev.type === 'punch') {
+        if (S.mode !== 'punch') setMode('punch');
+        S.p.n[ev.kind]++; $('#cS').textContent = S.p.n.straight; $('#cU').textContent = S.p.n.upper;
+        const sub = ev.g + 'g · ' + ev.how + ' · d straight ' + r2(ev.d.straight) + ' / uppercut ' + r2(ev.d.upper) + ' · up ' + ev.up + ' · turn ' + ev.turn + '°';
+        fire(ev.kind === 'straight' ? 'STRAIGHT' : 'UPPER ↑', ev.kind === 'straight' ? 'var(--lime)' : 'var(--cyan)', sub, 0, 0);
+      } else if (ev.type === 'shot') {
+        if (S.mode !== 'shot') setMode('shot');
+        const T = S.s; T.n++; if (ev.jump) T.jump++; if (ev.swish) T.swish++;
+        $('#sN').textContent = T.n; $('#sJ').textContent = T.jump; $('#sW').textContent = T.swish;
+        fire(ev.swish ? 'SWISH!' : ev.jump ? 'JUMP SHOT' : 'SHOT', ev.swish ? 'var(--lime)' : 'var(--yellow)',
+          'dip ' + ev.dip + ' · flick ' + ev.flick + '°/s · air ' + ev.air + 'ms', 0, 0);
+      }
+    });
+  };
+  if (bus) bus.on(handle);
+  else new EventSource('/stream?id=' + encodeURIComponent(id)).onmessage = e => handle(JSON.parse(e.data));
+}
+
+setMode('punch');
+tplUI();
+const REMOTE = new URLSearchParams(location.search).get('remote');
+if (REMOTE) startRemote(REMOTE);
+else window.Motion && Motion.hello('dev');
+requestAnimationFrame(draw);
+})();
+</script>
+</body>
+</html>

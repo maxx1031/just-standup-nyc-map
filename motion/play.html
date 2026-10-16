@@ -1,0 +1,336 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+<title>Warm Up</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bungee&family=JetBrains+Mono:wght@500;700&family=Permanent+Marker&family=Rubik+Wet+Paint&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet">
+<style>
+/* Player UI in the Brooklyn Ink style. The 3D DUMBO wall (布鲁克林伪3D.html, held on one shot)
+   fills the screen; every punch or shot throws ink at it. This page is only the HUD on top. */
+:root{
+  --bg:#0B0F0E; --text:#EDF3EF; --muted:#8FA39A; --night:#160616;
+  --lime:#C6FF3D; --cyan:#5EE6D0; --pink:#FF4FA3; --violet:#8A5CFF; --yellow:#FFE45E;
+  --drip:"Rubik Wet Paint","Anton",Impact,sans-serif; --street:"Bungee","Anton",Impact,sans-serif;
+  --marker:"Permanent Marker","Space Grotesk",sans-serif; --mono:"JetBrains Mono",ui-monospace,monospace;
+  --accent:var(--lime);
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--text);font-family:"Space Grotesk",system-ui,sans-serif;overflow:hidden}
+body{display:grid;place-items:center}
+button,input{font:inherit;color:inherit}
+button{border:0;background:none;padding:0;cursor:pointer}
+button:focus-visible,input:focus-visible{outline:2px solid var(--lime);outline-offset:2px}
+
+/* phone-shaped stage on a laptop, full screen on a phone (same rule as the scene page) */
+.stage{position:relative;height:min(94dvh,calc(100vw*16/9));aspect-ratio:9/16;border-radius:28px;overflow:hidden;background:#160b34;container-type:size;isolation:isolate;
+  user-select:none;-webkit-user-select:none;-webkit-tap-highlight-color:transparent;box-shadow:0 0 0 1px rgba(237,243,239,.09),0 30px 80px rgba(0,0,0,.6)}
+@media (max-width:560px){.stage{width:100vw;height:100dvh;aspect-ratio:auto;border-radius:0}}
+.scene{position:absolute;inset:0;width:100%;height:100%;border:0;display:block;pointer-events:none}
+.shade{position:absolute;inset:0;pointer-events:none;background:linear-gradient(180deg,rgba(22,6,22,.35) 0%,transparent 22%,transparent 50%,rgba(22,6,22,.75) 100%)}
+.flash{position:absolute;inset:0;pointer-events:none;background:var(--accent);opacity:0;transition:opacity .4s ease-out;mix-blend-mode:screen}
+
+.hud{position:absolute;inset:0;z-index:5;display:flex;flex-direction:column;padding:max(5cqw,env(safe-area-inset-top)) 5cqw max(5cqw,env(safe-area-inset-bottom))}
+.top{display:flex;justify-content:space-between;align-items:flex-start;gap:3cqw}
+.chip{font:4.4cqw/1 var(--street);color:var(--night);background:var(--pink);padding:1.6cqw 2.4cqw 1.2cqw;transform:skewX(-14deg) rotate(-3deg);box-shadow:1cqw 1cqw 0 var(--night);white-space:nowrap}
+.pill{margin-top:3.4cqw;display:flex;align-items:center;gap:1.6cqw;font:2.8cqw/1 var(--street);padding:1.6cqw 2.6cqw;border-radius:99px;background:rgba(22,6,22,.72);transform:skewX(-12deg) rotate(-2deg);white-space:nowrap;max-width:52cqw}
+.pill i{width:1.8cqw;height:1.8cqw;border-radius:50%;background:var(--muted);flex:none}
+.pill.ok i{background:var(--lime);box-shadow:0 0 2cqw var(--lime)}
+.pill span{overflow:hidden;text-overflow:ellipsis}
+.turf{min-width:27cqw;padding:2cqw 2.6cqw;border-radius:3cqw;background:rgba(22,6,22,.72);transform:skewX(-8deg) rotate(2deg);display:grid;grid-template-columns:auto 1fr;align-items:baseline;gap:1cqw 2cqw}
+.turf span{font:2.6cqw/1 var(--street);color:var(--muted)}
+.turf b{font:400 8cqw/1 var(--drip);color:var(--lime);text-align:right;font-variant-numeric:tabular-nums}
+.turf .bar{grid-column:1/-1;height:1.2cqw;border-radius:1cqw;background:rgba(237,243,239,.14);overflow:hidden}
+.turf .bar i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--lime),var(--pink));transition:width .3s}
+
+.rename{margin-top:3cqw;display:flex;gap:2cqw}
+.rename input{flex:1;min-width:0;height:11cqw;border-radius:3cqw;border:0;background:rgba(22,6,22,.85);padding:0 3cqw;font:3.8cqw var(--street)}
+.rename button{height:11cqw;padding:0 4cqw;border-radius:3cqw;background:var(--lime);color:var(--night);font:3.6cqw var(--street);transform:skewX(-10deg)}
+.toast{margin-top:2cqw;align-self:flex-start;font:3.6cqw/1.3 var(--marker);color:var(--cyan);text-shadow:0 .4cqw 2cqw #000}
+
+/* intro tips */
+.tips{margin-top:auto;display:flex;flex-direction:column;gap:2.4cqw;padding:4cqw;border-radius:4cqw;background:rgba(22,6,22,.78);transform:rotate(-1.5deg)}
+.tips p{margin:0;display:grid;grid-template-columns:7cqw 1fr;gap:2cqw;align-items:start;font:4cqw/1.3 var(--marker)}
+.tips b{font:400 5.4cqw/1 var(--drip);color:var(--lime)}
+.msg{margin-top:3cqw;padding:3cqw 4cqw;border-radius:3cqw;background:rgba(255,90,78,.9);color:#fff;font-size:3.6cqw;line-height:1.4}
+
+/* move demo: a glowing fist / ball runs a dashed path over the wall */
+.demo{position:relative;flex:1;min-height:0;margin:4cqw 0 2cqw}
+.demo svg{position:absolute;inset:0;width:100%;height:100%}
+.demo path{fill:none;stroke:var(--accent);stroke-width:1.4;stroke-dasharray:1 4;stroke-linecap:round;opacity:.9;vector-effect:non-scaling-stroke;filter:drop-shadow(0 0 4px var(--accent))}
+.demo .obj{position:absolute;left:0;top:0;width:15cqw;height:15cqw;margin:-7.5cqw 0 0 -7.5cqw;border-radius:50%;background:var(--accent);display:grid;place-items:center;font-size:8cqw;
+  box-shadow:0 0 6cqw var(--accent),.8cqw .8cqw 0 var(--night);offset-rotate:0deg;animation:run 1.5s cubic-bezier(.3,0,.2,1) infinite}
+@keyframes run{0%{offset-distance:0%;opacity:0}12%{opacity:1}70%{offset-distance:100%;opacity:1}100%{offset-distance:100%;opacity:0}}
+.reps{position:absolute;right:0;top:0;display:flex;gap:2cqw}
+.reps b{width:7cqw;height:7cqw;border-radius:50%;border:.8cqw solid rgba(237,243,239,.6);background:rgba(22,6,22,.5);transition:transform .15s,background .15s}
+.reps b.hit{background:var(--accent);border-color:var(--night);transform:scale(1.2) rotate(-8deg);box-shadow:.6cqw .6cqw 0 var(--night)}
+.pop{position:absolute;left:50%;top:38%;transform:translate(-50%,-50%) rotate(-6deg) skewX(-10deg);font:400 16cqw/1 var(--drip);color:var(--accent);text-shadow:1.2cqw 1.2cqw 0 var(--night);white-space:nowrap;pointer-events:none;opacity:0}
+.pop.go{animation:pop .7s ease-out}
+@keyframes pop{0%{opacity:0;transform:translate(-50%,-50%) rotate(-6deg) skewX(-10deg) scale(.4)}25%{opacity:1;transform:translate(-50%,-50%) rotate(-6deg) skewX(-10deg) scale(1.15)}100%{opacity:0;transform:translate(-50%,-60%) rotate(-6deg) skewX(-10deg) scale(1)}}
+
+/* caption in the scene page's style */
+.cap{margin-top:auto;margin-bottom:4.5cqw;transform:skewX(-12deg) rotate(-4deg);transform-origin:left bottom}
+.demo:not([hidden]) + .cap{margin-top:0}
+.cap .k{font:3cqw/1 var(--street);color:var(--night);background:var(--accent);display:inline-block;padding:1.2cqw 2cqw;margin-bottom:2.4cqw}
+.cap h2{margin:0;font:400 13cqw/.95 var(--drip);color:var(--text);text-shadow:1.2cqw 1.2cqw 0 var(--violet),-.5cqw -.5cqw 0 var(--night)}
+.cap h2 em{font-style:normal;color:var(--accent)}
+.cap p{margin:2.2cqw 0 0;font:4.2cqw/1.2 var(--marker);color:var(--cyan);text-shadow:0 .4cqw 2cqw #000}
+.cap.swap{animation:wob .5s ease-out}
+@keyframes wob{0%{transform:skewX(4deg) rotate(4deg) scale(1.15);opacity:0}60%{transform:skewX(-16deg) rotate(-6deg) scale(.97);opacity:1}100%{transform:skewX(-12deg) rotate(-4deg)}}
+
+.ctrls{display:flex;gap:2.6cqw}
+.btn{height:13cqw;border-radius:4cqw;font:4.4cqw/1 var(--street);display:grid;place-items:center;transform:skewX(-10deg)}
+.ink{flex:1;background:var(--pink);color:var(--night);box-shadow:0 1.2cqw 0 #A3236A}
+.ink:active{transform:skewX(-10deg) translateY(1cqw);box-shadow:none}
+.ink:disabled{opacity:.6}
+.sq{min-width:20cqw;padding:0 3cqw;background:rgba(22,6,22,.8);color:var(--lime);box-shadow:inset 0 0 0 .5cqw var(--lime);font-size:3.4cqw}
+.sq[aria-pressed="true"]{background:var(--lime);color:var(--night)}
+.load{position:absolute;inset:0;z-index:8;display:grid;place-items:center;text-align:center;padding:8cqw;background:#160b34;font:5cqw/1.3 var(--street);color:var(--lime);transition:opacity .4s}
+@media (prefers-reduced-motion:reduce){.demo .obj{animation-duration:3s}.cap.swap,.pop.go{animation:none}.flash{transition:none}}
+</style>
+</head>
+<body>
+<div class="stage" id="stage">
+  <!-- DUMBO WALLS shot of the Brooklyn scene, held still -->
+  <iframe class="scene" id="scene" src="../%E5%B8%83%E9%B2%81%E5%85%8B%E6%9E%97%E4%BC%AA3D.html?embed&t=11.6" title="DUMBO wall" aria-hidden="true" tabindex="-1"></iframe>
+  <div class="shade"></div>
+  <div class="flash" id="flash"></div>
+
+  <div class="hud">
+    <div class="top">
+      <div style="display:flex;flex-direction:column;align-items:flex-start">
+        <div class="chip">JUST STANDUP</div>
+        <button class="pill" id="devBtn" aria-label="Rename this phone"><i></i><span id="devName">…</span></button>
+      </div>
+      <div class="turf"><span>TURF</span><b id="turf">0%</b><div class="bar"><i id="bar"></i></div></div>
+    </div>
+    <div class="rename" id="renameRow" hidden>
+      <input id="devInput" maxlength="24" placeholder="Max's iPhone" aria-label="Phone name">
+      <button id="devSave">SAVE</button>
+    </div>
+    <div class="toast" id="toast" hidden></div>
+
+    <!-- intro -->
+    <div class="tips" id="tips">
+      <p><b>1</b>Phone tight in your punching hand. Strap on if you have one.</p>
+      <p><b>2</b>Sound on. iPhone: flip the ringer switch off silent.</p>
+      <p><b>3</b>Give yourself an arm's length of space.</p>
+    </div>
+    <div class="msg" id="msg" hidden></div>
+
+    <!-- move demo (hidden on intro) -->
+    <div class="demo" id="demo" hidden>
+      <svg viewBox="0 0 100 100" preserveAspectRatio="none"><path id="track"/></svg>
+      <div class="obj" id="obj"></div>
+      <div class="reps" id="reps"><b></b><b></b><b></b></div>
+      <div class="pop" id="pop"></div>
+    </div>
+
+    <div class="cap" id="cap">
+      <div class="k" id="capK">WARM-UP · 1 MIN</div>
+      <h2 id="capT">STAND<br><em>UP.</em></h2>
+      <p id="capS">3 moves, 3 times each. Every hit throws ink.</p>
+    </div>
+
+    <div class="ctrls" id="ctrls">
+      <button class="btn ink" id="main">START</button>
+      <button class="btn sq" id="skip" hidden>SKIP</button>
+      <button class="btn sq" id="fPunch" aria-pressed="true" hidden>PUNCH</button>
+      <button class="btn sq" id="fShot" aria-pressed="false" hidden>SHOOT</button>
+    </div>
+  </div>
+  <div class="load" id="load">MIXING PAINT…</div>
+</div>
+
+<script src="core.js"></script>
+<script>
+(() => {
+const $ = s => document.querySelector(s);
+const M = window.Motion;
+const scene = () => { try { return $('#scene').contentWindow.ink; } catch (e) { return null; } };
+// ?mirror=ID: no sensors here; replay what phone ID is showing (used inside the laptop monitor)
+const MIRROR = new URLSearchParams(location.search).get('mirror');
+
+/* Demo paths are in a 100×100 box over the wall area. */
+const MOVES = [
+  { key: 'straight', mode: 'punch', color: 'var(--lime)', icon: '👊', pop: 'BAM!',
+    k: 'MOVE 1 / 3 · ×3', t: 'STRAIGHT<br><em>PUNCH</em>', s: 'Punch straight ahead, snap it back.',
+    path: 'M 12 70 L 88 62', vib: 25, sound: 'straight' },
+  { key: 'upper', mode: 'punch', color: 'var(--cyan)', icon: '👊', pop: 'POW!',
+    k: 'MOVE 2 / 3 · ×3', t: 'UPPER<br><em>CUT</em>', s: 'Start low by your waist, swing up.',
+    path: 'M 25 92 Q 40 92 52 62 T 78 14', vib: [20, 30, 40], sound: 'upper' },
+  { key: 'shot', mode: 'shot', color: 'var(--yellow)', icon: '🏀', pop: 'SPLASH!',
+    k: 'MOVE 3 / 3 · ×3', t: 'JUMP<br><em>SHOT</em>', s: 'Bend, push up, flick. Keep holding the phone!',
+    path: 'M 18 90 Q 50 -10 82 30', vib: [30, 40, 60], sound: 'shot' }
+];
+const REPS = 3;
+let step = -1, reps = 0, busy = false, phase = 'intro';
+
+/* ---------- helpers ---------- */
+function caption(k, t, s) {
+  if ($('#capT').innerHTML === t && $('#capK').textContent === k) return;
+  $('#capK').textContent = k; $('#capT').innerHTML = t; $('#capS').textContent = s;
+  const c = $('#cap'); c.classList.remove('swap'); void c.offsetWidth; c.classList.add('swap');
+}
+let accentNow = 'var(--lime)';
+function pushState() {   // tell the laptop what this screen shows
+  if (MIRROR) return;
+  M.emit({ type: 'state', phase, step, reps, accent: accentNow, mode: M.S.mode,
+    k: $('#capK').textContent, t: $('#capT').innerHTML, s: $('#capS').textContent });
+}
+function accent(c) { accentNow = c; document.documentElement.style.setProperty('--accent', c); }
+function flash() {
+  const f = $('#flash'); f.style.transition = 'none'; f.style.opacity = '.35';
+  requestAnimationFrame(() => { f.style.transition = ''; f.style.opacity = '0'; });
+}
+function pop(text) { const p = $('#pop'); p.textContent = text; p.classList.remove('go'); void p.offsetWidth; p.classList.add('go'); }
+function turfUI() {
+  const s = scene(), v = s ? Math.round(s.turf()) : 0;
+  $('#turf').textContent = v + '%'; $('#bar').style.width = v + '%';
+}
+setInterval(turfUI, 250);
+function throwInk(kind, swish) {   // ink lands a moment later, after the ball flies
+  const s = scene(); if (!s) return;
+  kind === 'shot' ? s.shot(swish) : s.punch(kind);
+}
+
+/* ---------- phone name ---------- */
+function devUI(ok) { const d = M.device(); $('#devName').textContent = d.name.toUpperCase() + ' · ' + d.id; $('#devBtn').classList.toggle('ok', !!ok); }
+$('#devBtn').onclick = () => {
+  const r = $('#renameRow'); r.hidden = !r.hidden;
+  if (!r.hidden) { $('#devInput').value = M.device().name; $('#devInput').focus(); }
+};
+$('#devSave').onclick = async () => {
+  const ok = await M.rename($('#devInput').value);
+  $('#renameRow').hidden = true; devUI(ok);
+  const t = $('#toast'); t.hidden = false;
+  t.textContent = ok ? 'the laptop knows you as “' + M.device().name + '”' : 'saved here · laptop not reachable';
+  setTimeout(() => t.hidden = true, 3500);
+};
+
+/* ---------- guided moves ---------- */
+function startMove(i) {
+  step = i; reps = 0; busy = false; phase = 'move';
+  const m = MOVES[i];
+  accent(m.color);
+  $('#tips').hidden = true; $('#msg').hidden = true; $('#demo').hidden = false;
+  $('#main').hidden = true; $('#skip').hidden = false; $('#fPunch').hidden = $('#fShot').hidden = true;
+  caption(m.k, m.t, m.s);
+  $('#track').setAttribute('d', m.path); $('#obj').textContent = m.icon;
+  document.querySelectorAll('#reps b').forEach(b => b.className = '');
+  if (!MIRROR) { M.teach(m.mode === 'punch' ? m.key : null); M.setMode(m.mode); }
+  fitDemo(); pushState();
+}
+// offset-path is in CSS pixels, so scale the 100×100 path to the demo box (measured while visible)
+function fitDemo() {
+  if (step < 0) return;
+  const r = $('#demo').getBoundingClientRect(), sx = r.width / 100, sy = r.height / 100;
+  const p = MOVES[step].path.replace(/(-?\d+(?:\.\d+)?) (-?\d+(?:\.\d+)?)/g, (_, x, y) => (x * sx).toFixed(1) + ' ' + (y * sy).toFixed(1));
+  $('#obj').style.offsetPath = "path('" + p + "')";
+}
+addEventListener('resize', fitDemo);
+
+function rep(swish) {
+  if (busy) return;
+  const m = MOVES[step];
+  reps++;
+  document.querySelectorAll('#reps b')[reps - 1].className = 'hit';
+  const word = reps < REPS ? m.pop : 'NICE!';
+  pop(word); flash(); M.play(M.SND[m.sound]); M.haptic(m.vib); throwInk(m.key, swish);
+  M.emit({ type: 'hit', kind: m.key, swish: !!swish, pop: word }); pushState();
+  if (reps >= REPS) {
+    busy = true; M.setMode('off');
+    const last = step + 1 >= MOVES.length;   // the whole warm-up is done → victory fanfare
+    setTimeout(() => M.play(last ? M.SND.win : M.SND.done), 350);
+    setTimeout(() => step + 1 < MOVES.length ? startMove(step + 1) : finish(), 1400);
+  }
+}
+$('#skip').onclick = () => { M.setMode('off'); step + 1 < MOVES.length ? startMove(step + 1) : finish(); };
+
+/* ---------- done + free play ---------- */
+function finish() {
+  step = -1; phase = 'free'; M.teach(null); accent('var(--lime)');
+  $('#demo').hidden = true; $('#skip').hidden = true; $('#fPunch').hidden = $('#fShot').hidden = false;
+  $('#main').hidden = false; $('#main').textContent = 'REDO WARM-UP';
+  caption('WARM-UP DONE', "YOU'RE<br><em>READY.</em>", 'Keep going. Every hit throws ink.');
+  if (!MIRROR) setFree('punch');
+  pushState();
+}
+function setFree(mode) {
+  $('#fPunch').setAttribute('aria-pressed', mode === 'punch'); $('#fShot').setAttribute('aria-pressed', mode === 'shot');
+  M.setMode(mode);
+}
+function freeHit(label, color, sound, vib, kind, swish) {
+  accent(color); caption('FREE PLAY', label, kind === 'shot' ? (swish ? 'perfect wrist flick' : 'nice shot') : 'keep throwing');
+  flash(); M.play(sound); M.haptic(vib); throwInk(kind, swish);
+  M.emit({ type: 'hit', kind, swish: !!swish }); pushState();
+}
+M.on('punch', kind => {
+  if (phase === 'move') { if (MOVES[step].mode === 'punch') rep(false); return; }
+  if (phase !== 'free') return;
+  if (kind === 'straight') freeHit('STRAIGHT<br><em>BAM!</em>', 'var(--lime)', M.SND.straight, 25, 'straight');
+  else freeHit('UPPER<br><em>CUT!</em>', 'var(--cyan)', M.SND.upper, [20, 30, 40], 'upper');
+});
+M.on('shot', info => {
+  if (phase === 'move') { if (MOVES[step].mode === 'shot') rep(info.swish); return; }
+  if (phase !== 'free') return;
+  freeHit(info.swish ? 'SWISH<br><em>SPLASH!</em>' : 'JUMP<br><em>SHOT!</em>', 'var(--yellow)', M.SND.shot, [30, 40, 60], 'shot', info.swish);
+});
+$('#fPunch').onclick = () => setFree('punch');
+$('#fShot').onclick = () => setFree('shot');
+
+/* ---------- start ---------- */
+$('#main').onclick = async () => {
+  const b = $('#main');
+  if (phase === 'free') { const s = scene(); s && s.reset(); M.resetTeaching(); startMove(0); return; }
+  b.disabled = true; b.textContent = 'STARTING…'; $('#msg').hidden = true;
+  const err = await M.start();
+  if (err) { $('#msg').textContent = err; $('#msg').hidden = false; b.disabled = false; b.textContent = 'TRY AGAIN'; return; }
+  b.disabled = false;
+  M.resetTeaching();   // the warm-up is the calibration, so start clean
+  M.startLink();       // stream sensor frames + events to the laptop monitor
+  startMove(0);
+};
+
+// hide the loading cover once the wall is ready (poll: the iframe may finish loading before this script runs)
+const ready = setInterval(() => {
+  if (!scene()) return;
+  clearInterval(ready); $('#load').style.opacity = 0; setTimeout(() => $('#load').hidden = true, 450);
+}, 200);
+if (!MIRROR) { devUI(false); M.hello('player').then(devUI); }
+else startMirror();
+
+/* ---------- mirror mode: follow the phone's state and hits ---------- */
+function startMirror() {
+  $('#ctrls').style.visibility = 'hidden'; $('#devBtn').disabled = true;
+  fetch('/devices').then(r => r.json()).then(list => {
+    const d = list.find(x => x.id === MIRROR);
+    $('#devName').textContent = (d ? d.name.toUpperCase() : 'PHONE') + ' · ' + MIRROR; $('#devBtn').classList.add('ok');
+  }).catch(() => {});
+  const handle = msg => (msg.events || []).forEach(ev => {
+    if (ev.type === 'state') applyState(ev);
+    if (ev.type === 'hit') { pop(ev.pop || (ev.kind === 'shot' ? 'SPLASH!' : 'BAM!')); flash(); throwInk(ev.kind, ev.swish); }
+  });
+  // inside monitor.html: share its single stream; opened on its own: open our own
+  const bus = parent !== window && parent.MONITOR_BUS;
+  if (bus) bus.on(handle);
+  else new EventSource('/stream?id=' + encodeURIComponent(MIRROR)).onmessage = e => handle(JSON.parse(e.data));
+}
+function applyState(st) {
+  phase = st.phase; step = st.step; accent(st.accent);
+  $('#tips').hidden = st.phase !== 'intro'; $('#msg').hidden = true;
+  $('#demo').hidden = st.phase !== 'move';
+  if (st.phase === 'move' && MOVES[st.step]) {
+    $('#track').setAttribute('d', MOVES[st.step].path); $('#obj').textContent = MOVES[st.step].icon; fitDemo();
+    document.querySelectorAll('#reps b').forEach((b, i) => b.className = i < st.reps ? 'hit' : '');
+  }
+  caption(st.k, st.t, st.s);
+}
+})();
+</script>
+</body>
+</html>
