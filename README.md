@@ -1,6 +1,8 @@
 # 纽约 3D 地图 Demo（10.16 黑客松）
 
-风格按 `UI_newyork.png`（M1 纽约总览）和 `UI2_newyork.png`（M2 Brooklyn 落点）做：楼都是简化后的几何块，只画纽约五个区。
+风格按 `UI_newyork.png`（M1 纽约总览）和 `UI2_newyork.png`（M2 Brooklyn 落点）做，只画纽约五个区。
+
+**演示流程：** 打开是纽约总览 → 点 Enter Brooklyn → Brooklyn「点亮」（板块变亮、轮廓光晕变大、BOROUGHS LIT 0/5 → 1/5，约 1 秒）→ 俯冲进 DUMBO（4 秒），真实楼宇随镜头拉近从地面升起 → 落在你拍视频的 4 个点，底部卡片播放对应视频。
 
 ## 怎么跑
 ```bash
@@ -19,14 +21,16 @@ python3 -m http.server 5180
 | `lib/` | MapLibre GL JS 5.6.0（本地副本，不走 CDN） |
 | `截图/` | 桌面和手机的总览、落点截图，以及一段往返转场录屏 |
 | `旧版/` | 上一版：用 OpenFreeMap 瓦片画的真实建筑，楼块很多 |
+| `00_video/` | 你在 DUMBO 拍的视频；其中 4 段用作点位视频 |
 
 ## 地图里有什么（全部来自 `nyc.geojson`，提前算好）
 | 名称 | 用途 | 数量 | 数据来源 |
 |---|---|---|---|
 | `borough` | 五个区的板块（总览用）。Brooklyn 青柠色，其余区蓝绿色，表面带网格纹理 | 5 | NYC Open Data |
 | `shore` | Brooklyn、Manhattan 的精细岸线。近景用作地面，以及青柠色的 Brooklyn 水岸线 | 2 | NYC Open Data |
-| `block` | 近景地面的方块网格：70 m 一格，斜 25°，所以斜看时像菱形 | 4,754 | 根据岸线生成 |
-| `bar` | 近景光柱：每 3×3 格只留最高的一栋，而且只保留 ≥45 m 的楼 | 158 | OSM 建筑高度 |
+| `bldg` | DUMBO 核心区（半径 520 m）的真实楼宇轮廓和高度；zoom 14.2→15.7 之间从地面升到实际高度 | 306 | OSM（392/424 栋有 `height` 标签，其余用楼层估算或 10 m 兜底） |
+| `block` | 核心区外的方块网格：70 m 一格，斜 15°，配合 bearing -60 斜看时像菱形 | 4,655 | 根据岸线生成 |
+| `bar` | 核心区外的光柱：每 3×3 格只留最高的一栋，而且只保留 ≥45 m 的楼 | 151 | OSM 建筑高度 |
 | `citybar` | 总览光柱：约 450 m 一格取最高楼，只保留 ≥110 m、在五区内的楼（新泽西的楼已排除） | 120 | OSM 建筑高度 |
 | `bridge` / `tower` | Brooklyn Bridge、Manhattan Bridge 的桥面和桥塔 | 2 / 4 | OSM |
 | `ring` | 总览里围绕 Brooklyn 的雷达圈 | 3 | 生成 |
@@ -42,13 +46,14 @@ python3 -m http.server 5180
 - **建筑高度、桥梁**：© OpenStreetMap contributors (ODbL)，2026-10-15 通过 Overpass API 查询。
   - 高度取 `height` 标签；没有的话用 `building:levels × 3.2 m` 估算。
   - 桥塔位置是沿桥面按比例估的，不是测量值。
-- **点位**：坐标用 OSM（Nominatim）核对过。
-  | # | 地点 | 经度, 纬度 |
-  |---|---|---|
-  | 01 | Brooklyn Bridge Park — Pier 1 | -73.9962, 40.7027 |
-  | 02 | DUMBO — Washington Street | -73.9897, 40.7031 |
-  | 03 | Brooklyn Heights Promenade | -73.9978, 40.6964 |
-  | 04 | Domino Park | -73.9683, 40.7141 |
+- **点位**：来自你拍的视频。视频文件里没有 GPS，位置是我看画面判断的，你确认过，再用 OSM（Nominatim）取坐标。精确到街区，不是精确到米。
+  | # | 地点 | 视频 | 经度, 纬度 |
+  |---|---|---|---|
+  | 01 | Fulton Ferry Landing（桥下） | `01_布鲁克林桥下.mp4` | -73.9946, 40.7036 |
+  | 02 | Empire Fulton Ferry 草坪 | `10_草坪看大桥.mp4` | -73.9919, 40.7046 |
+  | 03 | Water Street 石子路 | `12_铁门石子路.mp4` | -73.9902, 40.7032 |
+  | 04 | St. Ann's Warehouse 红砖院子 | `13_红砖院子_橙桌.mp4` | -73.9928, 40.7036 |
+  - 图钉缩略图是从这 4 段视频截的帧，挑的都是没有人脸的帧，已嵌进 index.html，不占额外文件。
 
 ## 重新生成 `nyc.geojson`
 生成脚本 `build_nyc.py` 和它用的原始数据（区界 + Overpass 查询结果）为了少放文件，都没放进这个文件夹，只存在 Claude 这次对话的临时目录里。**这次对话之后就找不回来了。**之后想改格子大小、光柱密度或网格角度，要么先让 Claude 把脚本和数据存进来，要么重新下载数据再生成。
@@ -57,13 +62,14 @@ python3 -m http.server 5180
 | | 桌面 | 手机（竖屏） |
 |---|---|---|
 | NYC | zoom 10.45 / pitch 55 / bearing -28 | zoom 9.0 / pitch 55 / bearing -20 |
-| Brooklyn | zoom 14.8 / pitch 66 / bearing 10 | zoom 13.9 / pitch 66 / bearing 30 |
+| DUMBO | zoom 16.2 / pitch 62 / bearing -60 | zoom 15.8 / pitch 62 / bearing -60 |
 
-Brooklyn 视角是按"四个点都要避开头部和底部卡片"算出来的。
+DUMBO 视角是按"四个点都要避开头部和底部卡片"算出来的。bearing -60 让 Manhattan 和两座桥出现在画面右上方，跟设计稿一致。
 
 ## 已知限制
-- **四个点位和新设计稿不一致。** 用的是任务文档里的四个点。`UI2_newyork.png` 里是三个 DUMBO 点（Subway station / Pier 1 railing / Bridge Park lawn）。如果换成设计稿的三个点，可以放得更近，构图也更像设计稿。
-- **落点 zoom 低于要求。** 因为 Domino Park 离其他三个点约 2 km，落点 zoom（桌面 14.8、手机 13.9）都低于任务要求的 15–16。
+- **落点 zoom 略高于任务要求。** 桌面 16.2、手机 15.8，任务要求是约 15–16；这是为了真正俯冲进 DUMBO 街区。
+- **点位精度只到街区。** 位置是看画面判断的，不是 GPS。
+- **楼宇高度来自 OSM，没有逐栋核对。** 少数没有高度标签的楼是估算值。
 - **手机总览里 Manhattan 标签被 BROOKLYN 卡片挡住了。**
-- **图钉缩略图是简单的 SVG 插画，不是真实照片。**
-- **帧率只在无头 Chrome 里测过。** 软件渲染下，录屏在 18 秒里拿到 645 帧（约 35 fps）；旧版的真实建筑同样条件下只有约 8 fps。真机没有测过。
+- **点亮只在第一次进 Brooklyn 时播放。** 之后来回都直接飞；刷新页面会重置。
+- **帧率只在无头 Chrome 里测过。** 软件渲染下，往返录屏在约 21 秒里拿到 705 帧（约 33 fps）。真机没有测过。
